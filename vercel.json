@@ -1,0 +1,15 @@
+{
+  "services": {
+    "web": {
+      "root": "frontend/"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
+  ]
+}
