@@ -1,0 +1,99 @@
+{
+  "services": {
+    "web": {
+      "root": "frontend/"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/admin/:path*",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/menu/:path*",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/table/:path*",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/t/:path*",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/order-confirmation/:path*",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/cart",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/checkout",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/scan",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/profile",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/order-history",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/categories",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/waiter",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
+  ]
+}
