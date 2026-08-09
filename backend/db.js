@@ -2,6 +2,7 @@ const sql = require('mssql')
 require('dotenv').config()
 const config = {
   server: process.env.DB_SERVER || 'MARK\\SQLEXPRESS01',
+  port: parseInt(process.env.DB_PORT) || 1433,
   database: process.env.DB_NAME || 'RestaurantDB',
   user: process.env.DB_USER || 'menuapp',
   password: process.env.DB_PASS || 'MenuApp2024!',

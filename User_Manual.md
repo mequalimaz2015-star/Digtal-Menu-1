@@ -21,8 +21,6 @@
 2. The screen automatically updates! As the kitchen begins preparing your food, the **"Preparing"** icon will turn orange.
 3. Once the food is ready to be delivered to your table, the screen will switch to **"Food is Ready! ✅"**.
 
----
-
 ## 2. For Administrators & Staff
 
 ### 2.1 Logging In
@@ -48,7 +46,6 @@
 1. Click the **Menu** tab on the left sidebar.
 2. Use the "+ Add Item" button to create a new food item. Note that you must provide a Name, Category, Price, and Image URL.
 3. Existing items can be edited or permanently deleted using the buttons in their respective rows.
-
 ---
 
 ## 3. Server Startup (IT/Manager Guide)
