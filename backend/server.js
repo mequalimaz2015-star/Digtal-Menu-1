@@ -1,7 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 const path = require('path')
-require('dotenv').config()
+require('dotenv').config({ path: require('path').join(__dirname, '.env') })
 
 const app = express()
 app.use(cors({ origin: '*' }))
@@ -20,8 +20,8 @@ app.use('/api/waiter-calls', require('./routes/waiterCalls'))
 app.use('/api/reviews',     require('./routes/reviews'))
 app.use('/api/chat',        require('./routes/chat'))
 
-app.get('/', (req, res) => res.json({ message: 'ABC Restaurant API', status: 'running' }))
 app.get('/health', (req, res) => res.json({ status: 'healthy' }))
+app.get('/api/status', (req, res) => res.json({ message: 'ABC Restaurant API', status: 'running' }))
 app.get('/api/network-info', (req, res) => {
   const os = require('os')
   const interfaces = os.networkInterfaces()
@@ -37,12 +37,18 @@ app.get('/api/network-info', (req, res) => {
   res.json({ localIp, port: process.env.PORT || 8000, frontendPort: 3000 })
 })
 
-// Serve frontend in production (Render)
+// Serve frontend in production (Render) — must be AFTER all API routes
 if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
   app.use(express.static(path.join(__dirname, '../frontend/dist')))
+  // SPA fallback: serve index.html for any non-API route
   app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API route not found' })
+    }
     res.sendFile(path.resolve(__dirname, '../frontend/dist', 'index.html'))
   })
+} else {
+  app.get('/', (req, res) => res.json({ message: 'ABC Restaurant API', status: 'running' }))
 }
 
 const http = require('http')
