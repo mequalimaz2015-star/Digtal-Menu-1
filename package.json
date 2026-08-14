@@ -2,7 +2,7 @@
   "name": "digital-menu-root",
   "version": "1.0.0",
   "scripts": {
-    "build:all": "cd frontend && npm install && npm run build && cd ../backend && npm install",
+    "build:all": "npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend",
     "start": "node backend/server.js"
   }
 }

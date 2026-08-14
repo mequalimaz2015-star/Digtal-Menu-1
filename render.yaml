@@ -2,8 +2,7 @@ services:
   - type: web
     name: digital-menu
     runtime: node
-    rootDir: .
-    buildCommand: npm run build:all
+    buildCommand: npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend
     startCommand: node backend/server.js
     envVars:
       - key: NODE_ENV
