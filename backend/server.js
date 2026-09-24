@@ -39,13 +39,14 @@ app.get('/api/network-info', (req, res) => {
 
 // Serve frontend in production (Render) — must be AFTER all API routes
 if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
-  app.use(express.static(path.join(__dirname, '../frontend/dist')))
+  const frontendDist = path.join(__dirname, '..', 'frontend', 'dist')
+  app.use(express.static(frontendDist))
   // SPA fallback: serve index.html for any non-API route
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({ error: 'API route not found' })
     }
-    res.sendFile(path.resolve(__dirname, '../frontend/dist', 'index.html'))
+    res.sendFile(path.join(frontendDist, 'index.html'))
   })
 } else {
   app.get('/', (req, res) => res.json({ message: 'ABC Restaurant API', status: 'running' }))
@@ -65,7 +66,7 @@ io.on('connection', (socket) => {
   console.log('⚡ Client connected to socket:', socket.id)
 })
 
-const PORT = process.env.PORT || 8000
+const PORT = process.env.PORT || 3000
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 API Server running on http://localhost:${PORT}`)
 })
