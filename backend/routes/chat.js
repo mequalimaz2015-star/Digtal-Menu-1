@@ -1,9 +1,7 @@
 const router = require('express').Router()
 const auth   = require('../middleware/auth')
-const { sql, query } = require('../db')
+const { query } = require('../db')
 
-// ── In-memory session store ──────────────────────────────────────────────────
-// { sessionId: { id, tableNumber, messages: [{role,text,ts}], createdAt, unread } }
 const sessions = new Map()
 
 function getOrCreate(sessionId, tableNumber = '') {
@@ -19,29 +17,24 @@ function getOrCreate(sessionId, tableNumber = '') {
   return sessions.get(sessionId)
 }
 
-// ── Smart AI engine ──────────────────────────────────────────────────────────
 async function getAIReply(userText, sessionId, tableNumber) {
   const text = userText.toLowerCase().trim()
   let menuItems = []
   let restaurantData = {}
 
-  // Load fresh data from DB for accurate responses
   try {
     const [menuRes, restRes] = await Promise.all([
-      query(`SELECT TOP 20 name, price, description, category_id, is_available, is_popular, is_spicy, is_vegetarian FROM menu_items WHERE is_available=1 ORDER BY is_popular DESC, name`),
-      query(`SELECT TOP 1 name, address, phone, working_hours, wifi_password, vat_rate, service_charge_rate FROM restaurant`),
+      query(`SELECT name, price, description, category_id, is_available, is_popular, is_spicy, is_vegetarian FROM menu_items WHERE is_available=true ORDER BY is_popular DESC, name LIMIT 20`),
+      query(`SELECT name, address, phone, working_hours, wifi_password, vat_rate, service_charge_rate FROM restaurant LIMIT 1`),
     ])
-    menuItems      = menuRes.recordset  || []
-    restaurantData = restRes.recordset[0] || {}
+    menuItems      = menuRes.rows  || []
+    restaurantData = restRes.rows[0] || {}
   } catch (_) {}
 
   const restaurant = restaurantData.name || 'ABC Restaurant'
   const vatPct     = Math.round((restaurantData.vat_rate || 0.15) * 100)
   const svcPct     = Math.round((restaurantData.service_charge_rate || 0.10) * 100)
 
-  // ── Intent matching ─────────────────────────────────────────────────────────
-
-  // Greetings
   if (/^(hi|hello|hey|hiya|good (morning|afternoon|evening)|selam|salam|ye|ሰላም)/i.test(text)) {
     const greets = [
       `👋 Hello! Welcome to **${restaurant}**! I'm your virtual assistant.\n\nI can help you with:\n• 🍽️ Browse our menu\n• 💰 Prices & specials\n• 📍 Location & hours\n• 📦 Track your order\n• ❓ Any questions\n\nWhat can I get for you today?`,
@@ -50,11 +43,8 @@ async function getAIReply(userText, sessionId, tableNumber) {
     return greets[Math.floor(Math.random() * greets.length)]
   }
 
-  // Menu request
   if (/menu|food|eat|order|item|dish|meal|what.*have|what.*serve|show me/i.test(text)) {
-    if (menuItems.length === 0) {
-      return `🍽️ Our menu is loading... Please check the menu tab for the full list of delicious items!`
-    }
+    if (menuItems.length === 0) return `🍽️ Our menu is loading... Please check the menu tab for the full list!`
     const topItems = menuItems.slice(0, 8)
     const lines = topItems.map(i => {
       const tags = [i.is_spicy ? '🌶️' : '', i.is_vegetarian ? '🥬' : '', i.is_popular ? '🔥' : ''].filter(Boolean).join(' ')
@@ -63,7 +53,6 @@ async function getAIReply(userText, sessionId, tableNumber) {
     return `🍽️ Here are some of our popular items:\n\n${lines}\n\n👆 Tap **Browse Menu** to see the full menu with images and details!`
   }
 
-  // Price query
   if (/price|cost|how much|birr|etb|expensive|cheap/i.test(text)) {
     if (menuItems.length > 0) {
       const sorted  = [...menuItems].sort((a,b) => a.price - b.price)
@@ -74,7 +63,6 @@ async function getAIReply(userText, sessionId, tableNumber) {
     return `💰 Our prices are very reasonable! Please check the menu for detailed pricing. All prices are in ETB and include ${vatPct}% VAT.`
   }
 
-  // Specific item price — "how much is pizza" etc.
   if (menuItems.length > 0) {
     const matched = menuItems.find(i =>
       text.includes(i.name.toLowerCase()) ||
@@ -89,73 +77,49 @@ async function getAIReply(userText, sessionId, tableNumber) {
     }
   }
 
-  // Opening hours / hours
-  if (/hour|open|close|time|when|schedule|working/i.test(text)) {
-    return `🕐 **Working Hours**\n\n${restaurantData.working_hours || 'Mon–Sun: 7:00 AM – 11:00 PM'}\n\nWe're open every day! Come visit us anytime within our working hours. 😊`
-  }
+  if (/hour|open|close|time|when|schedule|working/i.test(text))
+    return `🕐 **Working Hours**\n\n${restaurantData.working_hours || 'Mon–Sun: 7:00 AM – 11:00 PM'}\n\nWe're open every day! 😊`
 
-  // Location / address
-  if (/where|location|address|direction|map|find you|how.*get/i.test(text)) {
-    return `📍 **Our Location**\n\n${restaurantData.address || 'Bole Road, Addis Ababa, Ethiopia'}\n\n📞 Phone: ${restaurantData.phone || '+251 91 859 2028'}\n\nYou can find us on Google Maps — just search "${restaurant}"!`
-  }
+  if (/where|location|address|direction|map|find you|how.*get/i.test(text))
+    return `📍 **Our Location**\n\n${restaurantData.address || 'Bole Road, Addis Ababa, Ethiopia'}\n\n📞 Phone: ${restaurantData.phone || '+251 91 859 2028'}`
 
-  // WiFi
-  if (/wifi|wi-fi|internet|password|network/i.test(text)) {
-    return `📶 **WiFi Access**\n\nNetwork: **${restaurant}_Guest**\nPassword: **${restaurantData.wifi_password || 'Ask your waiter'}**\n\nEnjoy browsing while you dine! 🌐`
-  }
+  if (/wifi|wi-fi|internet|password|network/i.test(text))
+    return `📶 **WiFi Access**\n\nPassword: **${restaurantData.wifi_password || 'Ask your waiter'}**`
 
-  // Phone / contact
-  if (/phone|call|contact|number|reach/i.test(text)) {
-    return `📞 **Contact Us**\n\nPhone: **${restaurantData.phone || '+251 91 859 2028'}**\nAddress: ${restaurantData.address || 'Bole Road, Addis Ababa'}\n\nFeel free to call us for reservations or any inquiries!`
-  }
+  if (/phone|call|contact|number|reach/i.test(text))
+    return `📞 **Contact Us**\n\nPhone: **${restaurantData.phone || '+251 91 859 2028'}**\nAddress: ${restaurantData.address || 'Bole Road, Addis Ababa'}`
 
-  // Order tracking
-  if (/track|order|status|where.*food|ready|delivered|how long/i.test(text)) {
-    return `📦 **Order Tracking**\n\nYou can track your order in real-time!\n\n1️⃣ Go to **My Orders** in the app\n2️⃣ Find your order reference number\n3️⃣ See live status: Received → Preparing → Ready → Served\n\n⏱️ Average prep time: 15–25 minutes\n\nNeed help with a specific order? Tell me your order number!`
-  }
+  if (/track|order|status|where.*food|ready|delivered|how long/i.test(text))
+    return `📦 **Order Tracking**\n\nGo to **My Orders** in the app to see live status.\n⏱️ Average prep time: 15–25 minutes`
 
-  // Reservation
-  if (/reserv|book|table|seat/i.test(text)) {
-    return `🪑 **Table Reservations**\n\nYou can:\n• Walk in anytime — we welcome all guests!\n• Call us: **${restaurantData.phone || '+251 91 859 2028'}**\n• Scan the QR code at any table to start ordering directly\n\nWe'd love to have you! 😊`
-  }
+  if (/reserv|book|table|seat/i.test(text))
+    return `🪑 **Table Reservations**\n\nCall us: **${restaurantData.phone || '+251 91 859 2028'}**\nOr scan the QR code at any table to order directly!`
 
-  // Spicy / vegetarian
   if (/spicy|spice|hot|veg|vegetarian|halal|allerg/i.test(text)) {
     const spicy = menuItems.filter(i => i.is_spicy).slice(0, 4).map(i => i.name).join(', ')
     const veg   = menuItems.filter(i => i.is_vegetarian).slice(0, 4).map(i => i.name).join(', ')
-    return `🌶️ **Dietary Information**\n\n**Spicy dishes:** ${spicy || 'Ask our staff for spicy options'}\n\n🥬 **Vegetarian dishes:** ${veg || 'We have several vegetarian options — ask your waiter!'}\n\nAll our food is prepared with care. Please inform your waiter of any specific dietary requirements!`
+    return `🌶️ **Spicy dishes:** ${spicy || 'Ask our staff'}\n\n🥬 **Vegetarian dishes:** ${veg || 'We have several options — ask your waiter!'}`
   }
 
-  // Complaint / problem
-  if (/complaint|problem|issue|wrong|bad|unhappy|not good|terrible|awful/i.test(text)) {
-    return `😔 We're really sorry to hear that!\n\nYour experience matters to us deeply. I'm connecting you with our staff right now.\n\n👨‍💼 **A manager will be with you shortly.**\n\nYou can also:\n• 📞 Call us: ${restaurantData.phone || '+251 91 859 2028'}\n• ⭐ Leave a review to help us improve\n\nThank you for your patience — we'll make it right! 🙏`
-  }
+  if (/complaint|problem|issue|wrong|bad|unhappy|not good|terrible|awful/i.test(text))
+    return `😔 We're really sorry!\n\n👨‍💼 **A manager will be with you shortly.**\n\n📞 Call us: ${restaurantData.phone || '+251 91 859 2028'}`
 
-  // Compliment / thanks
-  if (/thank|great|awesome|love|delicious|amazing|wonderful|excellent|best/i.test(text)) {
-    return `😊 Thank you so much! That means the world to us!\n\nWe work hard every day to give you the best experience. 🙏\n\n⭐ Would you like to leave us a review? It really helps us!\n\nIs there anything else I can help you with?`
-  }
+  if (/thank|great|awesome|love|delicious|amazing|wonderful|excellent|best/i.test(text))
+    return `😊 Thank you so much! That means the world to us! 🙏\n\n⭐ Would you like to leave us a review?`
 
-  // Waiter / help
-  if (/waiter|staff|help|assist|someone|human|person|agent|talk to/i.test(text)) {
-    return `🛎️ **Calling a Waiter**\n\nI'm notifying our staff right now!\n\nYou can also:\n• Tap the **🔔 bell icon** at the top of the menu page\n• A waiter will be with you within a few minutes\n\nIn the meantime, is there anything I can help you with? 😊`
-  }
+  if (/waiter|staff|help|assist|someone|human|person|agent|talk to/i.test(text))
+    return `🛎️ **Calling a Waiter**\n\nI'm notifying our staff right now!\n\n• Tap the **🔔 bell icon** at the top of the menu page`
 
-  // Bill / payment
-  if (/bill|pay|payment|cash|card|checkout/i.test(text)) {
-    return `💳 **Payment Information**\n\nWe currently accept:\n• 💵 Cash payment at the table\n• Your waiter will bring the bill when you're ready\n\n📋 To request your bill:\n• Tap the **🔔 bell** → select "Request the bill"\n• Or tell your waiter directly\n\nAll prices include ${vatPct}% VAT and ${svcPct}% service charge.`
-  }
+  if (/bill|pay|payment|cash|card|checkout/i.test(text))
+    return `💳 **Payment**\n\nWe accept cash at the table.\nTap the **🔔 bell** → select "Request the bill"\n\nAll prices include ${vatPct}% VAT and ${svcPct}% service charge.`
 
-  // Goodbye
-  if (/bye|goodbye|see you|later|thanks bye|cya/i.test(text)) {
-    return `👋 Goodbye! Thank you for visiting **${restaurant}**!\n\nWe hope to see you again very soon. Have a wonderful day! 🌟\n\n⭐ Don't forget to leave us a review!`
-  }
+  if (/bye|goodbye|see you|later|thanks bye|cya/i.test(text))
+    return `👋 Goodbye! Thank you for visiting **${restaurant}**! Have a wonderful day! 🌟`
 
-  // Default — escalate to human
-  return `🤔 I'm not quite sure about that, but I want to make sure you get the right answer!\n\n💬 **I'm connecting you with our team** — a staff member will reply to you shortly.\n\nIn the meantime, you can also:\n• 🍽️ Browse our menu\n• 🔔 Call a waiter\n• 📞 Call us: ${restaurantData.phone || '+251 91 859 2028'}\n\nIs there anything specific I can help you with right now?`
+  return `🤔 I'm not quite sure, but I'm connecting you with our team!\n\n🔔 You can also call a waiter or reach us at: ${restaurantData.phone || '+251 91 859 2028'}`
 }
 
-// ── POST /api/chat  (customer sends message) ─────────────────────────────────
+// POST /api/chat
 router.post('/', async (req, res) => {
   try {
     const { sessionId, tableNumber, message, customerName } = req.body
@@ -165,18 +129,15 @@ router.post('/', async (req, res) => {
     if (customerName && !session.customerName) session.customerName = customerName
     if (tableNumber  && !session.tableNumber)  session.tableNumber  = tableNumber
 
-    // Save customer message
     const customerMsg = { role: 'customer', text: message.trim(), ts: new Date().toISOString(), id: `${Date.now()}-c` }
     session.messages.push(customerMsg)
     session.unread++
     session.lastActivity = new Date().toISOString()
 
-    // Get AI reply
-    const aiText  = await getAIReply(message, sessionId, tableNumber)
-    const botMsg  = { role: 'bot', text: aiText, ts: new Date().toISOString(), id: `${Date.now()}-b` }
+    const aiText = await getAIReply(message, sessionId, tableNumber)
+    const botMsg = { role: 'bot', text: aiText, ts: new Date().toISOString(), id: `${Date.now()}-b` }
     session.messages.push(botMsg)
 
-    // Notify admin via socket
     const io = req.app.get('io')
     if (io) {
       io.emit('chat_new_message', {
@@ -194,7 +155,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-// ── POST /api/chat/:sessionId/reply  (admin replies) ─────────────────────────
+// POST /api/chat/:sessionId/reply  (admin)
 router.post('/:sessionId/reply', auth, async (req, res) => {
   try {
     const { sessionId } = req.params
@@ -214,7 +175,6 @@ router.post('/:sessionId/reply', auth, async (req, res) => {
     session.messages.push(adminMsg)
     session.lastActivity = new Date().toISOString()
 
-    // Push to customer's socket room
     const io = req.app.get('io')
     if (io) {
       io.emit(`chat_admin_reply_${sessionId}`, adminMsg)
@@ -227,22 +187,22 @@ router.post('/:sessionId/reply', auth, async (req, res) => {
   }
 })
 
-// ── GET /api/chat/sessions  (admin sees all conversations) ───────────────────
+// GET /api/chat/sessions  (admin)
 router.get('/sessions', auth, (req, res) => {
   const list = Array.from(sessions.values())
     .sort((a, b) => new Date(b.lastActivity || b.createdAt) - new Date(a.lastActivity || a.createdAt))
   res.json(list)
 })
 
-// ── GET /api/chat/:sessionId  (admin reads one conversation) ─────────────────
+// GET /api/chat/:sessionId  (admin)
 router.get('/:sessionId', auth, (req, res) => {
   const session = sessions.get(req.params.sessionId)
   if (!session) return res.status(404).json({ error: 'Not found' })
-  session.unread = 0   // mark as read
+  session.unread = 0
   res.json(session)
 })
 
-// ── DELETE /api/chat/:sessionId  (admin clears) ──────────────────────────────
+// DELETE /api/chat/:sessionId  (admin)
 router.delete('/:sessionId', auth, (req, res) => {
   sessions.delete(req.params.sessionId)
   res.status(204).end()

@@ -1,10 +1,9 @@
 const router = require('express').Router()
-const { sql, query } = require('../db')
+const { query } = require('../db')
 const auth = require('../middleware/auth')
 const local = require('../localStore')
 
-// Helper: try DB query, fall back to local store on error
-let dbAvailable = null // null = unknown, true/false = cached
+let dbAvailable = null
 
 async function checkDb() {
   if (dbAvailable === true) return true
@@ -18,10 +17,9 @@ async function checkDb() {
   }
 }
 
-// Reset db availability every 30s so it retries
 setInterval(() => { dbAvailable = null }, 30000)
 
-// ── POST /api/orders  (customer places order) ─────────────────────────────────
+// POST /api/orders
 router.post('/', async (req, res) => {
   try {
     const { tableNumber, customerName, phone, notes, items, subtotal, vat, serviceCharge, grandTotal, estimatedTime, orderType, pickupTime, deliveryAddress, deliveryLat, deliveryLng } = req.body
@@ -30,14 +28,15 @@ router.post('/', async (req, res) => {
     const orderRef = `ORD-${Date.now()}`
     const resolvedOrderType = orderType === 'takeaway' ? 'takeaway' : 'dine_in'
 
-    // Generate sequential pickup number for takeaway (e.g. T-042)
     let pickupNumber = null
     if (resolvedOrderType === 'takeaway') {
       const useDb2 = await checkDb()
       if (useDb2) {
         try {
-          const countRes = await query(`SELECT COUNT(*) AS cnt FROM orders WHERE order_type='takeaway' AND CAST(created_at AS DATE) = CAST(GETDATE() AS DATE)`)
-          const todayCount = (countRes.recordset[0]?.cnt || 0) + 1
+          const countRes = await query(
+            `SELECT COUNT(*) AS cnt FROM orders WHERE order_type='takeaway' AND created_at::date = CURRENT_DATE`
+          )
+          const todayCount = (parseInt(countRes.rows[0]?.cnt) || 0) + 1
           pickupNumber = `T-${String(todayCount).padStart(3, '0')}`
         } catch (_) { pickupNumber = `T-${Date.now().toString().slice(-3)}` }
       } else {
@@ -48,64 +47,62 @@ router.post('/', async (req, res) => {
     const useDb = await checkDb()
 
     if (useDb) {
-      // ── SQL Server path ──
       try {
         const orderResult = await query(`
           INSERT INTO orders (order_ref, table_number, customer_name, phone, notes, subtotal, vat, service_charge, grand_total, estimated_time, order_type, pickup_number, pickup_time, delivery_address, delivery_lat, delivery_lng)
-          OUTPUT INSERTED.*
-          VALUES (@ref, @table, @name, @phone, @notes, @sub, @vat, @svc, @total, @est, @orderType, @pickupNumber, @pickupTime, @deliveryAddress, @deliveryLat, @deliveryLng)
-        `, {
-          ref:             { type: sql.NVarChar, value: orderRef },
-          table:           { type: sql.NVarChar, value: resolvedOrderType === 'takeaway' ? 'Takeaway' : (tableNumber || '') },
-          name:            { type: sql.NVarChar, value: customerName || '' },
-          phone:           { type: sql.NVarChar, value: phone || '' },
-          notes:           { type: sql.NVarChar, value: notes || '' },
-          sub:             { type: sql.Float,    value: parseFloat(subtotal) || 0 },
-          vat:             { type: sql.Float,    value: parseFloat(vat) || 0 },
-          svc:             { type: sql.Float,    value: parseFloat(serviceCharge) || 0 },
-          total:           { type: sql.Float,    value: parseFloat(grandTotal) || 0 },
-          est:             { type: sql.Int,      value: parseInt(estimatedTime) || 20 },
-          orderType:       { type: sql.NVarChar, value: resolvedOrderType },
-          pickupNumber:    { type: sql.NVarChar, value: pickupNumber || '' },
-          pickupTime:      { type: sql.NVarChar, value: pickupTime || '' },
-          deliveryAddress: { type: sql.NVarChar, value: deliveryAddress || '' },
-          deliveryLat:     { type: sql.Float,    value: parseFloat(deliveryLat) || null },
-          deliveryLng:     { type: sql.Float,    value: parseFloat(deliveryLng) || null },
-        })
-        const order = orderResult.recordset[0]
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          RETURNING *
+        `, [
+          orderRef,
+          resolvedOrderType === 'takeaway' ? 'Takeaway' : (tableNumber || ''),
+          customerName || '',
+          phone || '',
+          notes || '',
+          parseFloat(subtotal) || 0,
+          parseFloat(vat) || 0,
+          parseFloat(serviceCharge) || 0,
+          parseFloat(grandTotal) || 0,
+          parseInt(estimatedTime) || 20,
+          resolvedOrderType,
+          pickupNumber || '',
+          pickupTime || '',
+          deliveryAddress || '',
+          parseFloat(deliveryLat) || null,
+          parseFloat(deliveryLng) || null,
+        ])
+        const order = orderResult.rows[0]
 
         for (const item of items) {
           await query(`
             INSERT INTO order_items (order_id, menu_item_name, price, quantity, modifiers, special_instructions, item_total)
-            VALUES (@orderId, @name, @price, @qty, @mods, @instr, @total)
-          `, {
-            orderId: { type: sql.Int, value: order.id },
-            name: { type: sql.NVarChar, value: item.name || '' },
-            price: { type: sql.Float, value: parseFloat(item.price) || 0 },
-            qty: { type: sql.Int, value: parseInt(item.qty) || 1 },
-            mods: { type: sql.NVarChar, value: item.modifiers || '' },
-            instr: { type: sql.NVarChar, value: item.specialInstructions || '' },
-            total: { type: sql.Float, value: (parseFloat(item.price) || 0) * (parseInt(item.qty) || 1) },
-          })
+            VALUES ($1,$2,$3,$4,$5,$6,$7)
+          `, [
+            order.id,
+            item.name || '',
+            parseFloat(item.price) || 0,
+            parseInt(item.qty) || 1,
+            item.modifiers || '',
+            item.specialInstructions || '',
+            (parseFloat(item.price) || 0) * (parseInt(item.qty) || 1),
+          ])
         }
 
-        const itemsResult = await query(`SELECT * FROM order_items WHERE order_id=@id`,
-          { id: { type: sql.Int, value: order.id } })
+        const itemsResult = await query(`SELECT * FROM order_items WHERE order_id=$1`, [order.id])
 
         if (resolvedOrderType === 'dine_in' && tableNumber) {
           try {
-            await query(`UPDATE tables SET status = 'occupied' WHERE number = @table`, { table: { type: sql.NVarChar, value: String(tableNumber) } })
-          } catch(e) {}
+            await query(`UPDATE tables SET status='occupied' WHERE number=$1`, [String(tableNumber)])
+          } catch (e) {}
         }
 
-        return res.status(201).json({ ...order, items: itemsResult.recordset })
+        return res.status(201).json({ ...order, items: itemsResult.rows })
       } catch (dbErr) {
         console.warn('DB write failed, falling back to local store:', dbErr.message)
         dbAvailable = false
       }
     }
 
-    // ── Local store fallback ──
+    // Local store fallback
     const order = local.createOrder({ orderRef, tableNumber: resolvedOrderType === 'takeaway' ? 'Takeaway' : tableNumber, customerName, phone, notes, subtotal, vat, serviceCharge, grandTotal, estimatedTime, orderType: resolvedOrderType, pickupNumber, pickupTime, deliveryAddress, deliveryLat, deliveryLng })
     for (const item of items) {
       local.addOrderItem({ orderId: order.id, name: item.name, price: item.price, qty: item.qty, modifiers: item.modifiers, specialInstructions: item.specialInstructions })
@@ -119,7 +116,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-// ── GET /api/orders  (admin) ──────────────────────────────────────────────────
+// GET /api/orders  (admin)
 router.get('/', auth, async (req, res) => {
   try {
     const { status } = req.query
@@ -127,23 +124,23 @@ router.get('/', auth, async (req, res) => {
 
     if (useDb) {
       try {
-        let sql2 = `SELECT * FROM orders`
-        const params = {}
+        let sqlText = `SELECT * FROM orders`
+        const params = []
         if (status) {
-          sql2 += ` WHERE status=@status`
-          params.status = { type: sql.NVarChar, value: status }
+          sqlText += ` WHERE status=$1`
+          params.push(status)
         }
-        sql2 += ` ORDER BY created_at DESC`
-        const ordersResult = await query(sql2, params)
-        const orders = ordersResult.recordset
+        sqlText += ` ORDER BY created_at DESC`
+        const ordersResult = await query(sqlText, params)
+        const orders = ordersResult.rows
 
         if (orders.length > 0) {
-          const ids = orders.map(o => o.id).join(',')
-          const itemsResult = await query(`SELECT * FROM order_items WHERE order_id IN (${ids})`)
-          orders.forEach(o => { o.items = itemsResult.recordset.filter(i => i.order_id === o.id) })
+          const ids = orders.map(o => o.id)
+          const placeholders = ids.map((_, i) => `$${i + 1}`).join(',')
+          const itemsResult = await query(`SELECT * FROM order_items WHERE order_id IN (${placeholders})`, ids)
+          orders.forEach(o => { o.items = itemsResult.rows.filter(i => i.order_id === o.id) })
         }
 
-        // Merge local orders that may not be in DB yet
         const localOrders = local.getOrders(status)
         const dbRefs = new Set(orders.map(o => o.order_ref))
         const onlyLocal = localOrders.filter(o => !dbRefs.has(o.order_ref))
@@ -154,45 +151,41 @@ router.get('/', auth, async (req, res) => {
       }
     }
 
-    // Local store only
     return res.json(local.getOrders(status))
-
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
 })
 
-// ── GET /api/orders/:id ───────────────────────────────────────────────────────
+// GET /api/orders/:id
 router.get('/:id', async (req, res) => {
   try {
     const useDb = await checkDb()
 
     if (useDb) {
       try {
-        const ordResult = await query(`SELECT * FROM orders WHERE id=@id OR order_ref=@ref`, {
-          id: { type: sql.Int, value: parseInt(req.params.id) || 0 },
-          ref: { type: sql.NVarChar, value: req.params.id },
-        })
-        if (ordResult.recordset[0]) {
-          const order = ordResult.recordset[0]
-          const itemsResult = await query(`SELECT * FROM order_items WHERE order_id=@id`,
-            { id: { type: sql.Int, value: order.id } })
-          return res.json({ ...order, items: itemsResult.recordset })
+        const idVal = parseInt(req.params.id) || 0
+        const ordResult = await query(
+          `SELECT * FROM orders WHERE id=$1 OR order_ref=$2`,
+          [idVal, req.params.id]
+        )
+        if (ordResult.rows[0]) {
+          const order = ordResult.rows[0]
+          const itemsResult = await query(`SELECT * FROM order_items WHERE order_id=$1`, [order.id])
+          return res.json({ ...order, items: itemsResult.rows })
         }
       } catch (_) { dbAvailable = false }
     }
 
-    // Try local store
     const order = local.getOrderById(req.params.id)
     if (!order) return res.status(404).json({ error: 'Order not found' })
     return res.json(order)
-
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
 })
 
-// ── PUT /api/orders/:id/status  (admin) ───────────────────────────────────────
+// PUT /api/orders/:id/status  (admin)
 router.put('/:id/status', auth, async (req, res) => {
   try {
     const { status } = req.body
@@ -204,24 +197,22 @@ router.put('/:id/status', auth, async (req, res) => {
     if (useDb) {
       try {
         const result = await query(`
-          UPDATE orders SET status=@status, updated_at=GETDATE()
-          OUTPUT INSERTED.*
-          WHERE id=@id
-        `, {
-          id: { type: sql.Int, value: parseInt(req.params.id) },
-          status: { type: sql.NVarChar, value: status },
-        })
-        const updatedOrder = result.recordset[0]
+          UPDATE orders SET status=$1, updated_at=NOW()
+          WHERE id=$2
+          RETURNING *
+        `, [status, parseInt(req.params.id)])
+        const updatedOrder = result.rows[0]
         if (updatedOrder) {
           if (updatedOrder.table_number && (status === 'served' || status === 'cancelled')) {
-             try {
-                const activeCheck = await query(`SELECT COUNT(*) as count FROM orders WHERE table_number=@table AND status IN ('new', 'preparing', 'ready')`, { 
-                  table: { type: sql.NVarChar, value: updatedOrder.table_number }
-                })
-                if (activeCheck.recordset[0].count === 0) {
-                  await query(`UPDATE tables SET status = 'available' WHERE number = @table`, { table: { type: sql.NVarChar, value: updatedOrder.table_number } })
-                }
-             } catch(e) {}
+            try {
+              const activeCheck = await query(
+                `SELECT COUNT(*) as count FROM orders WHERE table_number=$1 AND status IN ('new','preparing','ready')`,
+                [updatedOrder.table_number]
+              )
+              if (parseInt(activeCheck.rows[0].count) === 0) {
+                await query(`UPDATE tables SET status='available' WHERE number=$1`, [updatedOrder.table_number])
+              }
+            } catch (e) {}
           }
           const io = req.app.get('io')
           if (io) io.emit('order_status_updated', updatedOrder)
@@ -230,19 +221,17 @@ router.put('/:id/status', auth, async (req, res) => {
       } catch (_) { dbAvailable = false }
     }
 
-    // Local store fallback
     const updated = local.updateOrderStatus(parseInt(req.params.id), status)
     if (!updated) return res.status(404).json({ error: 'Order not found' })
     const io = req.app.get('io')
     if (io) io.emit('order_status_updated', updated)
     return res.json(updated)
-
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
 })
 
-// ── DELETE /api/orders/:id  (admin) ───────────────────────────────────────────
+// DELETE /api/orders/:id  (admin)
 router.delete('/:id', auth, async (req, res) => {
   try {
     const id = parseInt(req.params.id)
@@ -250,15 +239,13 @@ router.delete('/:id', auth, async (req, res) => {
 
     if (useDb) {
       try {
-        await query(`DELETE FROM order_items WHERE order_id=@id`, { id: { type: sql.Int, value: id } })
-        await query(`DELETE FROM orders WHERE id=@id`, { id: { type: sql.Int, value: id } })
+        await query(`DELETE FROM order_items WHERE order_id=$1`, [id])
+        await query(`DELETE FROM orders WHERE id=$1`, [id])
       } catch (_) { dbAvailable = false }
     }
 
-    // Always clean from local store too
     local.deleteOrder(id)
     return res.status(204).end()
-
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

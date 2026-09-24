@@ -1,7 +1,7 @@
 const router = require('express').Router()
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const { sql, query } = require('../db')
+const { query } = require('../db')
 const auth = require('../middleware/auth')
 
 // Fallback admin used when DB is unreachable
@@ -23,23 +23,23 @@ router.post('/login', async (req, res) => {
 
     let user = null
 
-    // Try DB first
     try {
       const result = await query(
-        `SELECT * FROM users WHERE email = @email AND is_active = 1`,
-        { email: { type: sql.NVarChar, value: email } }
+        `SELECT * FROM users WHERE email = $1 AND is_active = true`,
+        [email]
       )
-      user = result.recordset[0]
+      user = result.rows[0]
     } catch (dbErr) {
       console.warn('DB unavailable, using fallback admin:', dbErr.message)
-      // Fall back to hardcoded admin if DB is down
       if (email === FALLBACK_ADMIN.email) {
         user = FALLBACK_ADMIN
       }
     }
+
     if (!user) return res.status(401).json({ error: 'Invalid credentials' })
     const valid = await bcrypt.compare(password, user.password)
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
+
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'digital-menu-secret-key-2024-abc-restaurant',
@@ -59,10 +59,10 @@ router.post('/login', async (req, res) => {
 router.get('/me', auth, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, name, email, role, is_active, created_at FROM users WHERE id = @id`,
-      { id: { type: sql.Int, value: req.user.id } }
+      `SELECT id, name, email, role, is_active, created_at FROM users WHERE id = $1`,
+      [req.user.id]
     )
-    res.json(result.recordset[0])
+    res.json(result.rows[0])
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
