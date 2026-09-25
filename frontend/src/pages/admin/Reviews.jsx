@@ -1,10 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiRefreshCw, FiStar, FiMessageSquare, FiTrash2, FiX } from 'react-icons/fi'
-
-const getApiBase = () =>
-  `${window.location.protocol}//${window.location.hostname}:8000/api`
-const getToken = () => localStorage.getItem('token')
+import client from '../../api/client'
 
 function StarDisplay({ value, size = 16 }) {
   return (
@@ -67,13 +64,11 @@ export default function Reviews() {
   const fetchAll = useCallback(async () => {
     try {
       const [revRes, sumRes] = await Promise.all([
-        fetch(`${getApiBase()}/reviews`, {
-          headers: { Authorization: `Bearer ${getToken()}` },
-        }),
-        fetch(`${getApiBase()}/reviews/summary`),
+        client.get('/reviews'),
+        client.get('/reviews/summary'),
       ])
-      if (revRes.ok) setReviews(await revRes.json())
-      if (sumRes.ok) setSummary(await sumRes.json())
+      setReviews(revRes.data)
+      setSummary(sumRes.data)
       setLastRefresh(new Date())
     } catch (_) {}
     finally { setLoading(false) }
@@ -85,10 +80,7 @@ export default function Reviews() {
     if (!window.confirm('Delete this review?')) return
     setDeleting(id)
     try {
-      await fetch(`${getApiBase()}/reviews/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${getToken()}` },
-      })
+      await client.delete(`/reviews/${id}`)
       setReviews(prev => prev.filter(r => r.id !== id))
       if (selected?.id === id) setSelected(null)
     } catch (_) {}

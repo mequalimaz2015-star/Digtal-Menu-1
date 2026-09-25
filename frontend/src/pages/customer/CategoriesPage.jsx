@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { FiArrowLeft, FiChevronRight } from 'react-icons/fi'
@@ -12,10 +12,17 @@ export default function CategoriesPage() {
   const { t, i18n } = useTranslation()
   const language = i18n.language
   const navigate = useNavigate()
-  const { categories, menuItems } = useMenuStore()
+  const params = useParams()
+  const tenantSlug = params.tenantSlug || null
+  const { categories, menuItems, fetchCustomerMenu } = useMenuStore()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [view] = useState('grid')
+
+  useEffect(() => {
+    fetchCustomerMenu(tenantSlug)
+  }, [tenantSlug, fetchCustomerMenu])
+
 
   const activeCategories = useMemo(() =>
     categories.filter(c => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder),

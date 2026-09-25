@@ -1,42 +1,54 @@
 const router = require('express').Router()
 const bcrypt = require('bcryptjs')
 const { query } = require('../db')
-const auth = require('../middleware/auth')
+const { requireAuth, requireRole } = require('../middleware/auth')
+const { resolveTenant, requireTenantMatch } = require('../middleware/tenant')
+const { checkStaffLimit } = require('../middleware/subscriptionGuard')
 
-// GET /api/users/waiters — PUBLIC
+router.use(resolveTenant)
+
+// GET /api/users/waiters — PUBLIC (tenant scoped)
 router.get('/waiters', async (req, res) => {
   try {
     const r = await query(`
       SELECT id, name, role FROM users
-      WHERE role = 'waiter' AND is_active = true
+      WHERE tenant_id = $1 AND role = 'waiter' AND is_active = true
       ORDER BY name
-    `)
+    `, [req.tenantId])
     res.json(r.rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-router.get('/', auth, async (req, res) => {
+// GET /api/users (admin)
+router.get('/', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {
-    const r = await query(`SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at`)
+    const r = await query(`
+      SELECT id, name, email, role, is_active, created_at 
+      FROM users 
+      WHERE tenant_id = $1 
+      ORDER BY created_at
+    `, [req.tenantId])
     res.json(r.rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-router.post('/', auth, async (req, res) => {
+// POST /api/users (admin) - Enforces staff account limit
+router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), checkStaffLimit, async (req, res) => {
   try {
     const { name, email, password, role } = req.body
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
     const hash = await bcrypt.hash(password, 10)
     const r = await query(`
-      INSERT INTO users (name, email, password, role)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO users (tenant_id, name, email, password, role)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING id, name, email, role, is_active, created_at
-    `, [name || '', email, hash, (role || 'waiter').toLowerCase()])
+    `, [req.tenantId, name || '', email, hash, (role || 'waiter').toLowerCase()])
     res.status(201).json(r.rows[0])
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-router.put('/:id', auth, async (req, res) => {
+// PUT /api/users/:id
+router.put('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {
     const { name, email, role, is_active, password } = req.body
     let r
@@ -44,23 +56,24 @@ router.put('/:id', auth, async (req, res) => {
       const hash = await bcrypt.hash(password, 10)
       r = await query(`
         UPDATE users SET name=$1, email=$2, role=$3, is_active=$4, password=$5
-        WHERE id=$6
+        WHERE id=$6 AND tenant_id=$7
         RETURNING id, name, email, role, is_active
-      `, [name, email, (role || '').toLowerCase(), is_active ? true : false, hash, parseInt(req.params.id)])
+      `, [name, email, (role || '').toLowerCase(), is_active ? true : false, hash, parseInt(req.params.id), req.tenantId])
     } else {
       r = await query(`
         UPDATE users SET name=$1, email=$2, role=$3, is_active=$4
-        WHERE id=$5
+        WHERE id=$5 AND tenant_id=$6
         RETURNING id, name, email, role, is_active
-      `, [name, email, (role || '').toLowerCase(), is_active ? true : false, parseInt(req.params.id)])
+      `, [name, email, (role || '').toLowerCase(), is_active ? true : false, parseInt(req.params.id), req.tenantId])
     }
     res.json(r.rows[0])
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-router.delete('/:id', auth, async (req, res) => {
+// DELETE /api/users/:id
+router.delete('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {
-    await query(`DELETE FROM users WHERE id=$1`, [parseInt(req.params.id)])
+    await query(`DELETE FROM users WHERE id=$1 AND tenant_id=$2`, [parseInt(req.params.id), req.tenantId])
     res.status(204).end()
   } catch (err) { res.status(500).json({ error: err.message }) }
 })

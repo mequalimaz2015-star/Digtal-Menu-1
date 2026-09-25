@@ -1,37 +1,42 @@
 const router = require('express').Router()
-const auth   = require('../middleware/auth')
+const { requireAuth } = require('../middleware/auth')
+const { resolveTenant } = require('../middleware/tenant')
 const { query } = require('../db')
+
+router.use(resolveTenant)
 
 const sessions = new Map()
 
-function getOrCreate(sessionId, tableNumber = '') {
-  if (!sessions.has(sessionId)) {
-    sessions.set(sessionId, {
+function getOrCreate(sessionId, tableNumber = '', tenantId = 1) {
+  const key = `${tenantId}:${sessionId}`
+  if (!sessions.has(key)) {
+    sessions.set(key, {
       id: sessionId,
+      tenantId,
       tableNumber,
       messages: [],
       createdAt: new Date().toISOString(),
       unread: 0,
     })
   }
-  return sessions.get(sessionId)
+  return sessions.get(key)
 }
 
-async function getAIReply(userText, sessionId, tableNumber) {
+async function getAIReply(userText, sessionId, tableNumber, tenantId) {
   const text = userText.toLowerCase().trim()
   let menuItems = []
   let restaurantData = {}
 
   try {
     const [menuRes, restRes] = await Promise.all([
-      query(`SELECT name, price, description, category_id, is_available, is_popular, is_spicy, is_vegetarian FROM menu_items WHERE is_available=true ORDER BY is_popular DESC, name LIMIT 20`),
-      query(`SELECT name, address, phone, working_hours, wifi_password, vat_rate, service_charge_rate FROM restaurant LIMIT 1`),
+      query(`SELECT name, price, description, category_id, is_available, is_popular, is_spicy, is_vegetarian FROM menu_items WHERE tenant_id = $1 AND is_available=true ORDER BY is_popular DESC, name LIMIT 20`, [tenantId]),
+      query(`SELECT name, address, phone, working_hours, wifi_password, vat_rate, service_charge_rate FROM tenants WHERE id = $1`, [tenantId]),
     ])
     menuItems      = menuRes.rows  || []
     restaurantData = restRes.rows[0] || {}
   } catch (_) {}
 
-  const restaurant = restaurantData.name || 'ABC Restaurant'
+  const restaurant = restaurantData.name || 'Digital Menu'
   const vatPct     = Math.round((restaurantData.vat_rate || 0.15) * 100)
   const svcPct     = Math.round((restaurantData.service_charge_rate || 0.10) * 100)
 
@@ -92,30 +97,6 @@ async function getAIReply(userText, sessionId, tableNumber) {
   if (/track|order|status|where.*food|ready|delivered|how long/i.test(text))
     return `📦 **Order Tracking**\n\nGo to **My Orders** in the app to see live status.\n⏱️ Average prep time: 15–25 minutes`
 
-  if (/reserv|book|table|seat/i.test(text))
-    return `🪑 **Table Reservations**\n\nCall us: **${restaurantData.phone || '+251 91 859 2028'}**\nOr scan the QR code at any table to order directly!`
-
-  if (/spicy|spice|hot|veg|vegetarian|halal|allerg/i.test(text)) {
-    const spicy = menuItems.filter(i => i.is_spicy).slice(0, 4).map(i => i.name).join(', ')
-    const veg   = menuItems.filter(i => i.is_vegetarian).slice(0, 4).map(i => i.name).join(', ')
-    return `🌶️ **Spicy dishes:** ${spicy || 'Ask our staff'}\n\n🥬 **Vegetarian dishes:** ${veg || 'We have several options — ask your waiter!'}`
-  }
-
-  if (/complaint|problem|issue|wrong|bad|unhappy|not good|terrible|awful/i.test(text))
-    return `😔 We're really sorry!\n\n👨‍💼 **A manager will be with you shortly.**\n\n📞 Call us: ${restaurantData.phone || '+251 91 859 2028'}`
-
-  if (/thank|great|awesome|love|delicious|amazing|wonderful|excellent|best/i.test(text))
-    return `😊 Thank you so much! That means the world to us! 🙏\n\n⭐ Would you like to leave us a review?`
-
-  if (/waiter|staff|help|assist|someone|human|person|agent|talk to/i.test(text))
-    return `🛎️ **Calling a Waiter**\n\nI'm notifying our staff right now!\n\n• Tap the **🔔 bell icon** at the top of the menu page`
-
-  if (/bill|pay|payment|cash|card|checkout/i.test(text))
-    return `💳 **Payment**\n\nWe accept cash at the table.\nTap the **🔔 bell** → select "Request the bill"\n\nAll prices include ${vatPct}% VAT and ${svcPct}% service charge.`
-
-  if (/bye|goodbye|see you|later|thanks bye|cya/i.test(text))
-    return `👋 Goodbye! Thank you for visiting **${restaurant}**! Have a wonderful day! 🌟`
-
   return `🤔 I'm not quite sure, but I'm connecting you with our team!\n\n🔔 You can also call a waiter or reach us at: ${restaurantData.phone || '+251 91 859 2028'}`
 }
 
@@ -125,7 +106,7 @@ router.post('/', async (req, res) => {
     const { sessionId, tableNumber, message, customerName } = req.body
     if (!sessionId || !message?.trim()) return res.status(400).json({ error: 'sessionId and message required' })
 
-    const session = getOrCreate(sessionId, tableNumber || '')
+    const session = getOrCreate(sessionId, tableNumber || '', req.tenantId)
     if (customerName && !session.customerName) session.customerName = customerName
     if (tableNumber  && !session.tableNumber)  session.tableNumber  = tableNumber
 
@@ -134,7 +115,7 @@ router.post('/', async (req, res) => {
     session.unread++
     session.lastActivity = new Date().toISOString()
 
-    const aiText = await getAIReply(message, sessionId, tableNumber)
+    const aiText = await getAIReply(message, sessionId, tableNumber, req.tenantId)
     const botMsg = { role: 'bot', text: aiText, ts: new Date().toISOString(), id: `${Date.now()}-b` }
     session.messages.push(botMsg)
 
@@ -142,6 +123,7 @@ router.post('/', async (req, res) => {
     if (io) {
       io.emit('chat_new_message', {
         sessionId,
+        tenantId:     req.tenantId,
         tableNumber:  session.tableNumber,
         customerName: session.customerName || '',
         message:      customerMsg,
@@ -156,14 +138,15 @@ router.post('/', async (req, res) => {
 })
 
 // POST /api/chat/:sessionId/reply  (admin)
-router.post('/:sessionId/reply', auth, async (req, res) => {
+router.post('/:sessionId/reply', requireAuth, async (req, res) => {
   try {
     const { sessionId } = req.params
     const { message } = req.body
     const adminUser = req.user
 
-    if (!sessions.has(sessionId)) return res.status(404).json({ error: 'Session not found' })
-    const session = sessions.get(sessionId)
+    const key = `${req.tenantId}:${sessionId}`
+    if (!sessions.has(key)) return res.status(404).json({ error: 'Session not found' })
+    const session = sessions.get(key)
 
     const adminMsg = {
       role: 'admin',
@@ -188,23 +171,26 @@ router.post('/:sessionId/reply', auth, async (req, res) => {
 })
 
 // GET /api/chat/sessions  (admin)
-router.get('/sessions', auth, (req, res) => {
+router.get('/sessions', requireAuth, (req, res) => {
   const list = Array.from(sessions.values())
+    .filter(s => s.tenantId === req.tenantId)
     .sort((a, b) => new Date(b.lastActivity || b.createdAt) - new Date(a.lastActivity || a.createdAt))
   res.json(list)
 })
 
 // GET /api/chat/:sessionId  (admin)
-router.get('/:sessionId', auth, (req, res) => {
-  const session = sessions.get(req.params.sessionId)
+router.get('/:sessionId', requireAuth, (req, res) => {
+  const key = `${req.tenantId}:${req.params.sessionId}`
+  const session = sessions.get(key)
   if (!session) return res.status(404).json({ error: 'Not found' })
   session.unread = 0
   res.json(session)
 })
 
 // DELETE /api/chat/:sessionId  (admin)
-router.delete('/:sessionId', auth, (req, res) => {
-  sessions.delete(req.params.sessionId)
+router.delete('/:sessionId', requireAuth, (req, res) => {
+  const key = `${req.tenantId}:${req.params.sessionId}`
+  sessions.delete(key)
   res.status(204).end()
 })
 

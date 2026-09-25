@@ -8,10 +8,7 @@ import { useMenuStore } from '../../store/useMenuStore'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-
-const getApiBase = () =>
-  `${window.location.protocol}//${window.location.hostname}:8000/api`
-const getToken = () => localStorage.getItem('token')
+import client from '../../api/client'
 
 export default function Reports() {
   const { menuItems, categories } = useMenuStore()
@@ -27,11 +24,8 @@ export default function Reports() {
   // Fetch real data from DB
   const fetchOrders = async () => {
     try {
-      const res = await fetch(`${getApiBase()}/orders`, {
-        headers: { Authorization: `Bearer ${getToken()}` }
-      })
-      if (!res.ok) throw new Error('Failed to fetch orders')
-      const data = await res.json()
+      const res = await client.get('/orders')
+      const data = res.data
       if (!Array.isArray(data)) throw new Error('Invalid data format')
       
       const mapped = data.map(o => ({

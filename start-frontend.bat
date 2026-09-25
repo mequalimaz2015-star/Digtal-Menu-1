@@ -6,6 +6,6 @@ echo  Local:   http://localhost:3000
 echo  Network: open with your WiFi IP
 echo ==========================================
 echo.
-cd /d "C:\xampp\htdocs\Digtal Menu\frontend"
+cd /d "%~dp0frontend"
 npm run dev
 pause

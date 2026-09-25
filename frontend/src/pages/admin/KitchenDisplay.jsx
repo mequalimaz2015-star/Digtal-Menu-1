@@ -2,10 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiClock, FiCheck, FiRefreshCw } from 'react-icons/fi'
 import toast from 'react-hot-toast'
-
-const getApiBase = () =>
-  `${window.location.protocol}//${window.location.hostname}:8000/api`
-const getToken = () => localStorage.getItem('token')
+import client from '../../api/client'
 const statusFlow = { new: 'preparing', preparing: 'ready', ready: 'served' }
 
 const colorsMap = {
@@ -42,11 +39,8 @@ export default function KitchenDisplay() {
 
   const fetchOrders = useCallback(async (silent = false) => {
     try {
-      const res = await fetch(`${getApiBase()}/orders`, {
-        headers: { Authorization: `Bearer ${getToken()}` }
-      })
-      if (!res.ok) return
-      const data = await res.json()
+      const res = await client.get('/orders')
+      const data = res.data
 
       const active = data
         .filter(o => ['new', 'preparing', 'ready'].includes(o.status))
@@ -99,11 +93,7 @@ export default function KitchenDisplay() {
     if (!next) return
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: next } : o))
     try {
-      await fetch(`${getApiBase()}/orders/${order.dbId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ status: next }),
-      })
+      await client.put(`/orders/${order.dbId}/status`, { status: next })
       toast.success(`Order #${order.id.slice(-4)} → ${next}`, { icon: '👨‍🍳' })
       if (next === 'served') setOrders(prev => prev.filter(o => o.id !== order.id))
     } catch {
@@ -137,7 +127,7 @@ export default function KitchenDisplay() {
             <FiRefreshCw size={16} /> Refresh
           </button>
           <button
-            onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('admin-user'); window.location.href = '/admin/login' }}
+            onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('admin-user'); localStorage.removeItem('tenant_slug'); window.location.href = '/admin/login' }}
             className="text-xs text-red-500 font-semibold px-3 py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border border-red-200 dark:border-red-900"
           >
             Logout

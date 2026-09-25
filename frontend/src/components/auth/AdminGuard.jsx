@@ -20,10 +20,14 @@ export default function AdminGuard({ children }) {
   const token    = localStorage.getItem('token')
   const location = useLocation()
 
-  // Not logged in or expired token
+  // Not logged in or expired token — clear all auth state including tenant context
   if (!isTokenValid(token)) {
     localStorage.removeItem('token')
     localStorage.removeItem('admin-user')
+    const slug = localStorage.getItem('tenant_slug') || 'default'
+    localStorage.removeItem(`menu-store-${slug}`)
+    localStorage.removeItem('menu-store')
+    localStorage.removeItem('tenant_slug')
     return <Navigate to="/admin/login" replace />
   }
 

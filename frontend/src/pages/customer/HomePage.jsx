@@ -39,11 +39,50 @@ export default function HomePage() {
     }
   }, [params.tableId, searchParams, currentTable, setTable])
 
-  const { info: restaurantInfo } = useRestaurantStore()
-  const { categories: storeCats, menuItems: storeItems } = useMenuStore()
+  const { info: restaurantInfo, fetchRestaurant } = useRestaurantStore()
+  const { categories: storeCats, menuItems: storeItems, fetchCustomerMenu } = useMenuStore()
+
+  const tenantSlug = params.tenantSlug || null
+
+  useEffect(() => {
+    if (tenantSlug) {
+      localStorage.setItem('tenant_slug', tenantSlug)
+      fetchRestaurant(tenantSlug)
+      fetchCustomerMenu(tenantSlug)
+    } else {
+      fetchRestaurant('abc-restaurant')
+      fetchCustomerMenu('abc-restaurant')
+    }
+  }, [tenantSlug, fetchRestaurant, fetchCustomerMenu])
+
   const categories = useMemo(() => [{ id: 'all', name: 'All', nameAm: 'ሁሉም', icon: '🍽️', color: '#e85d04' }, ...storeCats.filter(c => c.isActive)], [storeCats])
   const menuItems = useMemo(() => storeItems.filter(i => i.isAvailable), [storeItems])
-  const promotions = defaultPromos
+
+  const promotions = useMemo(() => {
+    if (!tenantSlug || tenantSlug === 'abc-restaurant' || tenantSlug === 'five-stop') {
+      return defaultPromos
+    }
+    return [
+      {
+        id: 1,
+        title: `Welcome to ${restaurantInfo.name}!`,
+        titleAm: `እንኳን ወደ ${restaurantInfo.nameAm || restaurantInfo.name} በደህና መጡ!`,
+        subtitle: restaurantInfo.tagline || 'Experience our freshly prepared special dishes.',
+        subtitleAm: 'ትኩስ እና ጣፋጭ ምግቦችን ከእኛ ጋር ይደሰቱ',
+        icon: '🍽️',
+        bg: 'from-amber-500 to-orange-600',
+      },
+      {
+        id: 2,
+        title: 'Special Menu Selection',
+        titleAm: 'ልዩ የምግብ ዝርዝር',
+        subtitle: 'Crafted with premium ingredients just for you.',
+        subtitleAm: 'ከጥራት ጋር የተዘጋጀ ምርጥ ምግብ',
+        icon: '⭐',
+        bg: 'from-rose-500 to-red-600',
+      }
+    ]
+  }, [tenantSlug, restaurantInfo])
 
   const filteredItems = useMemo(() => {
     return menuItems.filter((item) => {
@@ -56,6 +95,7 @@ export default function HomePage() {
       return matchCat && matchSearch
     })
   }, [menuItems, selectedCategory, searchQuery])
+
 
   const featuredItems  = menuItems.filter((i) => i.isFeatured)
   const bestSellers    = menuItems.filter((i) => i.isBestSeller)

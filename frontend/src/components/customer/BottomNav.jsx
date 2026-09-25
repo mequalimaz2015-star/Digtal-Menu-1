@@ -9,20 +9,24 @@ export default function BottomNav({ onCategoryTab }) {
   const items = useCartStore(s => s.items)
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
 
+  const pathMatch = pathname.match(/^\/r\/([^\/]+)/)
+  const tenantPrefix = pathMatch ? `/r/${pathMatch[1]}` : ''
+
   const getActive = () => {
-    if (pathname === '/cart') return 'orders'
-    if (pathname === '/profile') return 'profile'
-    if (pathname === '/categories' || pathname.startsWith('/categories')) return 'categories'
+    if (pathname.endsWith('/cart')) return 'orders'
+    if (pathname.endsWith('/profile')) return 'profile'
+    if (pathname.includes('/categories')) return 'categories'
     return 'home'
   }
   const active = getActive()
 
   const tabs = [
-    { id: 'home',       icon: FiHome,        label: 'Home',       action: () => navigate('/menu') },
-    { id: 'categories', icon: FiGrid,        label: 'Categories', action: () => navigate('/categories') },
-    { id: 'orders',     icon: FiShoppingBag, label: 'Orders',     action: () => navigate('/cart'), badge: totalItems },
-    { id: 'profile',    icon: FiUser,        label: 'Profile',    action: () => navigate('/profile') },
+    { id: 'home',       icon: FiHome,        label: 'Home',       action: () => navigate(tenantPrefix ? `${tenantPrefix}/menu` : '/menu') },
+    { id: 'categories', icon: FiGrid,        label: 'Categories', action: () => navigate(tenantPrefix ? `${tenantPrefix}/categories` : '/categories') },
+    { id: 'orders',     icon: FiShoppingBag, label: 'Orders',     action: () => navigate(tenantPrefix ? `${tenantPrefix}/cart` : '/cart'), badge: totalItems },
+    { id: 'profile',    icon: FiUser,        label: 'Profile',    action: () => navigate(tenantPrefix ? `${tenantPrefix}/profile` : '/profile') },
   ]
+
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 safe-bottom shadow-2xl">

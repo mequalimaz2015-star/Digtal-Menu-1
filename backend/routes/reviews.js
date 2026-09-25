@@ -1,6 +1,9 @@
 const router = require('express').Router()
 const { query } = require('../db')
-const auth = require('../middleware/auth')
+const { requireAuth, requireRole } = require('../middleware/auth')
+const { resolveTenant, requireTenantMatch } = require('../middleware/tenant')
+
+router.use(resolveTenant)
 
 // POST /api/reviews
 router.post('/', async (req, res) => {
@@ -10,10 +13,11 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'overall_rating must be 1–5' })
 
     const result = await query(`
-      INSERT INTO reviews (order_ref, table_number, customer_name, phone, overall_rating, food_rating, service_rating, comment)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      INSERT INTO reviews (tenant_id, order_ref, table_number, customer_name, phone, overall_rating, food_rating, service_rating, comment)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING *
     `, [
+      req.tenantId,
       orderRef || '',
       tableNumber || '',
       customerName || '',
@@ -24,13 +28,6 @@ router.post('/', async (req, res) => {
       comment || '',
     ])
 
-    await query(`
-      UPDATE restaurant SET
-        rating       = (SELECT AVG(overall_rating::float) FROM reviews),
-        review_count = (SELECT COUNT(*) FROM reviews)
-      WHERE id=1
-    `)
-
     res.status(201).json(result.rows[0])
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -38,9 +35,9 @@ router.post('/', async (req, res) => {
 })
 
 // GET /api/reviews  (admin)
-router.get('/', auth, async (req, res) => {
+router.get('/', requireAuth, requireTenantMatch, async (req, res) => {
   try {
-    const result = await query(`SELECT * FROM reviews ORDER BY created_at DESC`)
+    const result = await query(`SELECT * FROM reviews WHERE tenant_id = $1 ORDER BY created_at DESC`, [req.tenantId])
     res.json(result.rows)
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -62,7 +59,8 @@ router.get('/summary', async (req, res) => {
         SUM(CASE WHEN overall_rating=2 THEN 1 ELSE 0 END) AS two_star,
         SUM(CASE WHEN overall_rating=1 THEN 1 ELSE 0 END) AS one_star
       FROM reviews
-    `)
+      WHERE tenant_id = $1
+    `, [req.tenantId])
     res.json(result.rows[0])
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -70,15 +68,9 @@ router.get('/summary', async (req, res) => {
 })
 
 // DELETE /api/reviews/:id  (admin)
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {
-    await query(`DELETE FROM reviews WHERE id=$1`, [parseInt(req.params.id)])
-    await query(`
-      UPDATE restaurant SET
-        rating       = COALESCE((SELECT AVG(overall_rating::float) FROM reviews), 4.8),
-        review_count = (SELECT COUNT(*) FROM reviews)
-      WHERE id=1
-    `)
+    await query(`DELETE FROM reviews WHERE id=$1 AND tenant_id=$2`, [parseInt(req.params.id), req.tenantId])
     res.status(204).end()
   } catch (err) {
     res.status(500).json({ error: err.message })

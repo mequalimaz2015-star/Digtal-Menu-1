@@ -12,6 +12,7 @@ import useAppStore from '../../store/useAppStore'
 import NotificationBell from '../../components/admin/NotificationBell'
 import WaiterCallsMonitor from '../../components/admin/WaiterCallsMonitor'
 import { useRestaurantStore } from '../../store/useRestaurantStore'
+import { useMenuStore } from '../../store/useMenuStore'
 import { useRole } from '../../hooks/useRole'
 
 // ── Full nav definition — each item tagged with roles that can see it ─────────
@@ -77,10 +78,16 @@ export default function AdminLayout() {
   const navigate = useNavigate()
   const { darkMode, toggleDarkMode } = useAppStore()
   const { info } = useRestaurantStore()
+  const { fetchAll } = useMenuStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [chatUnread, setChatUnread]   = useState(0)
   const { role, perms, user, canAccess } = useRole()
   const badge = ROLE_BADGE[role] || ROLE_BADGE.admin
+
+  // Fetch tenant-scoped menu data fresh on every admin session mount
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   // Listen for new chat messages to show unread badge in topbar
   useEffect(() => {
@@ -92,6 +99,11 @@ export default function AdminLayout() {
   const handleLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('admin-user')
+    // Clear tenant slug — also removes the tenant-namespaced menu store cache
+    const slug = localStorage.getItem('tenant_slug') || 'default'
+    localStorage.removeItem(`menu-store-${slug}`)
+    localStorage.removeItem('menu-store')   // clean up old non-namespaced key
+    localStorage.removeItem('tenant_slug')
     navigate('/admin/login')
   }
 
@@ -179,7 +191,11 @@ export default function AdminLayout() {
               <FiBell size={17} /> Waiter Mode
             </a>
           )}
-          <a href="/menu" target="_blank" rel="noopener"
+          <a
+            href={info?.id && localStorage.getItem('tenant_slug') && localStorage.getItem('tenant_slug') !== 'abc-restaurant'
+              ? `/r/${localStorage.getItem('tenant_slug')}/menu`
+              : '/menu'}
+            target="_blank" rel="noopener"
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
             <FiExternalLink size={17} /> View Menu
           </a>

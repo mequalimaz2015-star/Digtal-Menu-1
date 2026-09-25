@@ -1,26 +1,40 @@
 const { Pool } = require('pg')
 require('dotenv').config()
 
-const pool = new Pool({
+const hasDb = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '')
+
+const pool = hasDb ? new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('localhost')
+  ssl: process.env.DATABASE_URL.includes('localhost')
     ? false
     : { rejectUnauthorized: false },
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 3000,
   idleTimeoutMillis: 30000,
   max: 10,
-})
+}) : null
 
-pool.on('error', (err) => {
-  console.error('❌ Pool error:', err.message)
-})
+if (pool) {
+  pool.on('error', (err) => {
+    console.error('❌ Pool error:', err.message)
+  })
+
+  // Test connection on startup
+  pool.query('SELECT 1').then(() => {
+    console.log('✅ Connected to PostgreSQL')
+  }).catch(err => {
+    console.error('❌ DB connection failed:', err.message)
+  })
+} else {
+  console.log('ℹ️ No DATABASE_URL set. Running in resilient localStore (JSON) mode.')
+}
 
 // query(sqlText, valuesArray)
-// e.g. query('SELECT * FROM users WHERE id = $1', [42])
 async function query(text, values = []) {
+  if (!pool) {
+    throw new Error('DATABASE_URL not configured')
+  }
   try {
     const res = await pool.query(text, values)
-    // Mimic mssql's recordset shape so routes work with minimal changes
     res.recordset = res.rows
     return res
   } catch (err) {
@@ -33,11 +47,5 @@ async function getPool() {
   return pool
 }
 
-// Test connection on startup
-pool.query('SELECT 1').then(() => {
-  console.log('✅ Connected to PostgreSQL')
-}).catch(err => {
-  console.error('❌ DB connection failed:', err.message)
-})
-
 module.exports = { query, getPool, pool }
+

@@ -7,10 +7,7 @@ import {
 } from 'react-icons/fi'
 import { MdTableRestaurant } from 'react-icons/md'
 import { useRole } from '../../hooks/useRole'
-
-const getApiBase = () =>
-  `${window.location.protocol}//${window.location.hostname}:8000/api`
-const getToken = () => localStorage.getItem('token')
+import client from '../../api/client'
 
 function timeAgo(iso) {
   if (!iso) return ''
@@ -44,11 +41,8 @@ export default function Dashboard() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await fetch(`${getApiBase()}/orders`, {
-        headers: { Authorization: `Bearer ${getToken()}` }
-      })
-      if (!res.ok) return
-      const data = await res.json()
+      const res = await client.get('/orders')
+      const data = res.data
       if (!Array.isArray(data)) return
 
       const mapped = data.map(o => ({

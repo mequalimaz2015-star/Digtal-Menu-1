@@ -6,6 +6,6 @@ echo  Port: 8000
 echo  Database: SQL Server (RestaurantDB)
 echo ==========================================
 echo.
-cd /d "C:\xampp\htdocs\Digtal Menu\backend"
+cd /d "%~dp0backend"
 node server.js
 pause

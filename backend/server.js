@@ -9,6 +9,9 @@ app.use(express.json())
 
 // Routes
 app.use('/api/auth',       require('./routes/auth'))
+app.use('/api/superadmin', require('./routes/superadmin'))
+app.use('/api/tenants',    require('./routes/tenants'))
+app.use('/api/delivery',   require('./routes/delivery'))
 app.use('/api/restaurant', require('./routes/restaurant'))
 app.use('/api/categories', require('./routes/categories'))
 app.use('/api/menu-items', require('./routes/menuItems'))

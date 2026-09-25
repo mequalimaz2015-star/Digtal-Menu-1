@@ -1,4 +1,7 @@
 const router = require('express').Router()
+const { resolveTenant } = require('../middleware/tenant')
+
+router.use(resolveTenant)
 
 let waiterCalls = []
 let nextCallId = 1
@@ -8,6 +11,7 @@ router.post('/', (req, res) => {
   const { tableNumber, reason, targetWaiterId, targetWaiterName } = req.body
   const call = {
     id: nextCallId++,
+    tenantId:         req.tenantId,
     tableNumber:      String(tableNumber || '1'),
     reason:           reason || 'Assistance requested',
     status:           'pending',
@@ -18,25 +22,24 @@ router.post('/', (req, res) => {
     createdAt:        new Date().toISOString(),
   }
   waiterCalls.unshift(call)
-  if (waiterCalls.length > 100) waiterCalls = waiterCalls.slice(0, 100)
+  if (waiterCalls.length > 200) waiterCalls = waiterCalls.slice(0, 200)
 
   const io = req.app.get('io')
   if (io) {
-    // Broadcast to all admins
     io.emit('waiter_call_created', call)
-    // Also emit targeted event so the specific waiter's device can filter
+    io.emit(`tenant-${req.tenantId}-waiter-call`, call)
     if (targetWaiterId) {
       io.emit(`waiter_call_for_${targetWaiterId}`, call)
     }
-    console.log(`🔔 Waiter call from Table ${call.tableNumber} → ${targetWaiterName || 'any waiter'}: "${call.reason}"`)
   }
 
   res.status(201).json(call)
 })
 
-// GET /api/waiter-calls (Admin/Waiter reads calls)
+// GET /api/waiter-calls (Admin/Waiter reads calls for current tenant)
 router.get('/', (req, res) => {
-  res.json(waiterCalls)
+  const tenantCalls = waiterCalls.filter(c => c.tenantId === req.tenantId || !c.tenantId)
+  res.json(tenantCalls)
 })
 
 // PUT /api/waiter-calls/:id/resolve (Admin/Waiter resolves call)
@@ -50,6 +53,7 @@ router.put('/:id/resolve', (req, res) => {
     const io = req.app.get('io')
     if (io) {
       io.emit('waiter_call_resolved', call)
+      io.emit(`tenant-${req.tenantId}-waiter-call-resolved`, call)
     }
     return res.json(call)
   }
@@ -70,6 +74,7 @@ router.put('/:id/assign', (req, res) => {
     const io = req.app.get('io')
     if (io) {
       io.emit('waiter_call_assigned', call)
+      io.emit(`tenant-${req.tenantId}-waiter-call-assigned`, call)
     }
     return res.json(call)
   }
@@ -78,7 +83,7 @@ router.put('/:id/assign', (req, res) => {
 
 // DELETE /api/waiter-calls (Admin clears all)
 router.delete('/', (req, res) => {
-  waiterCalls = []
+  waiterCalls = waiterCalls.filter(c => c.tenantId !== req.tenantId)
   const io = req.app.get('io')
   if (io) io.emit('waiter_calls_cleared')
   res.status(204).end()

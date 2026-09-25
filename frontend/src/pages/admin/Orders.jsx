@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FiSearch, FiEye, FiX, FiRefreshCw, FiTrash2, FiPrinter } from 'react-icons/fi'
 import { useOrderStore } from '../../store/useOrderStore'
 import toast from 'react-hot-toast'
-
-const API = '/api'
+import client from '../../api/client'
 
 const statusConfig = {
   new: { label: 'New', bg: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', dot: 'bg-blue-500' },
@@ -38,10 +37,6 @@ function timeAgo(iso) {
   return d.toLocaleDateString()
 }
 
-const getApiBase = () =>
-  `${window.location.protocol}//${window.location.hostname}:8000/api`
-const getToken = () => localStorage.getItem('token')
-
 export default function Orders() {
   const { markAllRead } = useOrderStore()
   const [orders, setOrders] = useState([])
@@ -55,11 +50,8 @@ export default function Orders() {
   // ── Fetch all orders from API ─────────────────
   const fetchOrders = useCallback(async (silent = false) => {
     try {
-      const res = await fetch(`${getApiBase()}/orders`, {
-        headers: { Authorization: `Bearer ${getToken()}` }
-      })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
+      const res = await client.get('/orders')
+      const data = res.data
 
       // Map to frontend format
       const mapped = data.map(o => ({
@@ -142,14 +134,7 @@ export default function Orders() {
     if (selectedOrder?.id === order.id) setSelectedOrder(s => ({ ...s, status: newStatus }))
 
     try {
-      await fetch(`${getApiBase()}/orders/${order.dbId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      })
+      await client.put(`/orders/${order.dbId}/status`, { status: newStatus })
       toast.success(`Order → ${newStatus}`)
     } catch {
       toast.error('Failed to update status')
@@ -162,10 +147,7 @@ export default function Orders() {
     if (!confirm(`Delete order #${order.id}?`)) return
     setOrders(prev => prev.filter(o => o.id !== order.id))
     try {
-      await fetch(`${getApiBase()}/orders/${order.dbId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${getToken()}` }
-      })
+      await client.delete(`/orders/${order.dbId}`)
       toast.success('Order deleted')
     } catch {
       toast.error('Failed to delete')

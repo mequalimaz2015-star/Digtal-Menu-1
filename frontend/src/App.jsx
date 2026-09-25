@@ -33,10 +33,24 @@ import OrderStatusMonitor from './components/customer/OrderStatusMonitor'
 import ChatWidget from './components/customer/ChatWidget'
 import WaiterPage from './pages/waiter/WaiterPage'
 
+// Multi-Tenant SaaS & Super Admin Pages
+import SuperAdminLogin from './pages/superadmin/SuperAdminLogin'
+import SuperAdminLayout from './pages/superadmin/SuperAdminLayout'
+import SuperAdminGuard from './components/auth/SuperAdminGuard'
+import SADashboard from './pages/superadmin/SADashboard'
+import SATenants from './pages/superadmin/SATenants'
+import SAPlans from './pages/superadmin/SAPlans'
+import SARevenue from './pages/superadmin/SARevenue'
+import SAUsers from './pages/superadmin/SAUsers'
+import SAActivity from './pages/superadmin/SAActivity'
+import SAAnnouncements from './pages/superadmin/SAAnnouncements'
+import SASettings from './pages/superadmin/SASettings'
+import TenantRegistration from './pages/saas/TenantRegistration'
+import RiderDashboard from './pages/rider/RiderDashboard'
+
 export default function App() {
   const { darkMode } = useAppStore()
 
-  // Apply on every render so it's always in sync
   useEffect(() => {
     const root = document.documentElement
     if (darkMode) {
@@ -54,7 +68,34 @@ export default function App() {
       <OrderStatusMonitor />
       
       <Routes>
-        {/* Customer Routes */}
+        {/* Super Admin Console Routes */}
+        <Route path="/superadmin/login" element={<SuperAdminLogin />} />
+        <Route
+          path="/superadmin"
+          element={
+            <SuperAdminGuard>
+              <SuperAdminLayout />
+            </SuperAdminGuard>
+          }
+        >
+          <Route index element={<SADashboard />} />
+          <Route path="tenants" element={<SATenants />} />
+          <Route path="plans" element={<SAPlans />} />
+          <Route path="revenue" element={<SARevenue />} />
+          <Route path="users" element={<SAUsers />} />
+          <Route path="activity" element={<SAActivity />} />
+          <Route path="announcements" element={<SAAnnouncements />} />
+          <Route path="settings" element={<SASettings />} />
+        </Route>
+
+        {/* Tenant Owner SaaS Registration */}
+        <Route path="/register-tenant" element={<TenantRegistration />} />
+        <Route path="/saas" element={<TenantRegistration />} />
+
+        {/* Rider Portal Route */}
+        <Route path="/rider" element={<RiderDashboard />} />
+
+        {/* Default Customer Routes */}
         <Route path="/" element={<><HomePage /><ChatWidget /></>} />
         <Route path="/menu" element={<><HomePage /><ChatWidget /></>} />
         <Route path="/menu/:tableId" element={<><HomePage /><ChatWidget /></>} />
@@ -68,10 +109,23 @@ export default function App() {
         <Route path="/order-history" element={<><OrderHistoryPage /><ChatWidget /></>} />
         <Route path="/categories" element={<><CategoriesPage /><ChatWidget /></>} />
 
-        {/* Waiter Device Route — standalone, no auth required */}
+        {/* Path-Based Multi-Tenant Customer Routes (/r/:tenantSlug/...) */}
+        <Route path="/r/:tenantSlug" element={<><HomePage /><ChatWidget /></>} />
+        <Route path="/r/:tenantSlug/menu" element={<><HomePage /><ChatWidget /></>} />
+        <Route path="/r/:tenantSlug/menu/:tableId" element={<><HomePage /><ChatWidget /></>} />
+        <Route path="/r/:tenantSlug/t/:tableId" element={<><HomePage /><ChatWidget /></>} />
+        <Route path="/r/:tenantSlug/categories" element={<><CategoriesPage /><ChatWidget /></>} />
+        <Route path="/r/:tenantSlug/cart" element={<><CartPage /><ChatWidget /></>} />
+        <Route path="/r/:tenantSlug/checkout" element={<CheckoutPage />} />
+        <Route path="/r/:tenantSlug/order-confirmation/:orderId" element={<OrderConfirmation />} />
+        <Route path="/r/:tenantSlug/profile" element={<><ProfilePage /><ChatWidget /></>} />
+        <Route path="/r/:tenantSlug/order-history" element={<><OrderHistoryPage /><ChatWidget /></>} />
+
+
+        {/* Waiter Device Route */}
         <Route path="/waiter" element={<WaiterPage />} />
 
-        {/* Admin Routes */}
+        {/* Restaurant Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
           path="/admin"

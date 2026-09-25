@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
@@ -24,10 +24,17 @@ const avatarOptions = [
 export default function ProfilePage() {
   const { i18n } = useTranslation()
   const navigate = useNavigate()
+  const params = useParams()
+  const tenantSlug = params.tenantSlug || null
   const { darkMode, toggleDarkMode, language, setLanguage, favorites, profilePhoto, setProfilePhoto } = useAppStore()
   const tableNumber = useCartStore(s => s.tableNumber)
   const { orders } = useOrderStore()
-  const { info: restaurantInfo } = useRestaurantStore()
+  const { info: restaurantInfo, fetchRestaurant } = useRestaurantStore()
+
+  useEffect(() => {
+    fetchRestaurant(tenantSlug)
+  }, [tenantSlug, fetchRestaurant])
+
 
   const [showPhotoModal, setShowPhotoModal] = useState(false)
   const [showRateModal,  setShowRateModal]  = useState(false)

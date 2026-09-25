@@ -52,6 +52,10 @@ export default function AdminLogin() {
         const result = await res.json()
         localStorage.setItem('token', result.access_token)
         localStorage.setItem('admin-user', JSON.stringify(result.user))
+        // Critical: store tenant_slug so every axios API call sends the right X-Tenant-Slug header
+        if (result.user?.tenant_slug) {
+          localStorage.setItem('tenant_slug', result.user.tenant_slug)
+        }
 
         const role = result.user?.role || 'admin'
         const dest = ROLE_REDIRECT[role] || '/admin'
