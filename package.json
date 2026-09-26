@@ -1,11 +1,17 @@
 {
-  "name": "digital-menu-root",
-  "version": "1.0.0",
+  "name": "digital-menu-saas",
+  "version": "2.0.0",
+  "description": "Digital Restaurant Menu SaaS — AletCloud deployment",
+  "private": true,
   "scripts": {
-    "build": "npm install --prefix backend && npm install --prefix frontend --legacy-peer-deps && npm run build --prefix frontend",
-    "start": "node backend/server.js"
+    "build": "cd frontend && npm install --legacy-peer-deps && npm run build",
+    "start": "cd backend && node server.js",
+    "install:all": "cd frontend && npm install --legacy-peer-deps && cd ../backend && npm install",
+    "migrate": "cd backend && node migrate.js",
+    "dev:backend": "cd backend && node server.js",
+    "dev:frontend": "cd frontend && npm run dev"
   },
-  "dependencies": {
-    "mysql2": "^3.24.4"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

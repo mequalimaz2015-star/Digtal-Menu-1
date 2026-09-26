@@ -77,17 +77,19 @@ const ROLE_BADGE = {
 export default function AdminLayout() {
   const navigate = useNavigate()
   const { darkMode, toggleDarkMode } = useAppStore()
-  const { info } = useRestaurantStore()
+  const { info, fetchRestaurant } = useRestaurantStore()
   const { fetchAll } = useMenuStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [chatUnread, setChatUnread]   = useState(0)
   const { role, perms, user, canAccess } = useRole()
   const badge = ROLE_BADGE[role] || ROLE_BADGE.admin
 
-  // Fetch tenant-scoped menu data fresh on every admin session mount
+  // Fetch tenant-scoped data fresh on every admin session mount
   useEffect(() => {
+    const slug = localStorage.getItem('tenant_slug')
+    fetchRestaurant(slug)
     fetchAll()
-  }, [fetchAll])
+  }, [fetchRestaurant, fetchAll])
 
   // Listen for new chat messages to show unread badge in topbar
   useEffect(() => {
@@ -99,10 +101,12 @@ export default function AdminLayout() {
   const handleLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('admin-user')
-    // Clear tenant slug — also removes the tenant-namespaced menu store cache
     const slug = localStorage.getItem('tenant_slug') || 'default'
+    // Clear all tenant-namespaced caches
     localStorage.removeItem(`menu-store-${slug}`)
-    localStorage.removeItem('menu-store')   // clean up old non-namespaced key
+    localStorage.removeItem(`restaurant-store-${slug}`)
+    localStorage.removeItem('menu-store')
+    localStorage.removeItem('restaurant-store')
     localStorage.removeItem('tenant_slug')
     navigate('/admin/login')
   }
