@@ -1,42 +1,36 @@
-const { Pool } = require('pg')
+const mysql = require('mysql2/promise')
 require('dotenv').config()
 
 const hasDb = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '')
 
-const pool = hasDb ? new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes('localhost')
-    ? false
-    : { rejectUnauthorized: false },
-  connectionTimeoutMillis: 3000,
-  idleTimeoutMillis: 30000,
-  max: 10,
-}) : null
+let pool = null
 
-if (pool) {
-  pool.on('error', (err) => {
-    console.error('❌ Pool error:', err.message)
-  })
+if (hasDb) {
+  // Supports mysql:// or standard connection parameters
+  pool = mysql.createPool(process.env.DATABASE_URL)
 
   // Test connection on startup
-  pool.query('SELECT 1').then(() => {
-    console.log('✅ Connected to PostgreSQL')
-  }).catch(err => {
-    console.error('❌ DB connection failed:', err.message)
-  })
+  pool.query('SELECT 1')
+    .then(() => {
+      console.log('✅ Connected to MySQL')
+    })
+    .catch(err => {
+      console.error('❌ DB connection failed:', err.message)
+    })
 } else {
   console.log('ℹ️ No DATABASE_URL set. Running in resilient localStore (JSON) mode.')
 }
 
-// query(sqlText, valuesArray)
+// query helper matching your previous structure
 async function query(text, values = []) {
   if (!pool) {
     throw new Error('DATABASE_URL not configured')
   }
   try {
-    const res = await pool.query(text, values)
-    res.recordset = res.rows
-    return res
+    // Replace PostgreSQL style placeholders ($1, $2) with MySQL style (?) if needed, 
+    // or ensure your queries use (?) for MySQL.
+    const [rows] = await pool.query(text, values)
+    return { rows, recordset: rows }
   } catch (err) {
     console.error('❌ DB query error:', err.message)
     throw err
@@ -48,4 +42,3 @@ async function getPool() {
 }
 
 module.exports = { query, getPool, pool }
-
