@@ -50,9 +50,9 @@ router.get('/summary', async (req, res) => {
     const result = await query(`
       SELECT
         COUNT(*)                                          AS total,
-        AVG(overall_rating::float)                       AS avg_overall,
-        AVG(food_rating::float)                          AS avg_food,
-        AVG(service_rating::float)                       AS avg_service,
+        AVG(overall_rating)                              AS avg_overall,
+        AVG(food_rating)                                 AS avg_food,
+        AVG(service_rating)                              AS avg_service,
         SUM(CASE WHEN overall_rating=5 THEN 1 ELSE 0 END) AS five_star,
         SUM(CASE WHEN overall_rating=4 THEN 1 ELSE 0 END) AS four_star,
         SUM(CASE WHEN overall_rating=3 THEN 1 ELSE 0 END) AS three_star,

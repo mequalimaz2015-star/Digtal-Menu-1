@@ -37,11 +37,20 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle 401 Unauthorized for admin routes without infinite loop
-    if (error.response?.status === 401 && window.location.pathname.startsWith('/admin')) {
-      localStorage.removeItem('token')
-      if (window.location.pathname !== '/admin/login' && window.location.pathname !== '/superadmin/login') {
-        window.location.href = '/admin/login'
+    // Handle 401 Unauthorized for superadmin & admin routes without infinite loop
+    if (error.response?.status === 401) {
+      if (window.location.pathname.startsWith('/superadmin')) {
+        localStorage.removeItem('superadmin_token')
+        localStorage.removeItem('superadmin_user')
+        if (window.location.pathname !== '/superadmin/login') {
+          window.location.href = '/superadmin/login'
+        }
+      } else if (window.location.pathname.startsWith('/admin')) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        if (window.location.pathname !== '/admin/login') {
+          window.location.href = '/admin/login'
+        }
       }
     }
     return Promise.reject(error)

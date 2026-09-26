@@ -4,5 +4,8 @@
   "scripts": {
     "build": "npm install --prefix backend && npm install --prefix frontend --legacy-peer-deps && npm run build --prefix frontend",
     "start": "node backend/server.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.24.4"
   }
 }

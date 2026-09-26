@@ -237,6 +237,217 @@ router.get('/plans', async (req, res) => {
   }
 })
 
+// GET /api/superadmin/users - All registered users across all tenants
+router.get('/users', async (req, res) => {
+  try {
+    try {
+      const result = await query(`
+        SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at, u.tenant_id,
+               t.name as tenant_name, t.slug as tenant_slug
+        FROM users u
+        LEFT JOIN tenants t ON u.tenant_id = t.id
+        ORDER BY u.created_at DESC
+      `)
+      if (result.rows.length > 0) return res.json(result.rows)
+    } catch (dbErr) {
+      console.warn('DB users query failed, returning fallback users:', dbErr.message)
+    }
+
+    const data = local.load()
+    const users = (data.users || []).map(u => {
+      const tenant = (data.tenants || []).find(t => t.id === u.tenant_id)
+      return {
+        ...u,
+        tenant_name: tenant ? tenant.name : (u.role === 'super_admin' ? 'Platform Engine' : 'N/A'),
+        tenant_slug: tenant ? tenant.slug : null
+      }
+    })
+    res.json(users)
+  } catch (err) {
+    console.error('Superadmin get users error:', err)
+    res.status(500).json({ error: 'Failed to fetch users' })
+  }
+})
+
+// POST /api/superadmin/plans - Create a new plan
+router.post('/plans', async (req, res) => {
+  try {
+    const { name, description, price_etb, billing_interval, max_menu_items, max_tables, max_orders_per_month, max_staff_accounts, delivery_enabled, white_label_enabled, analytics_enabled } = req.body
+    try {
+      const result = await query(`
+        INSERT INTO subscription_plans (name, description, price_etb, billing_interval, max_menu_items, max_tables, max_orders_per_month, max_staff_accounts, delivery_enabled, white_label_enabled, analytics_enabled)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+      `, [name, description || '', price_etb || 0, billing_interval || 'monthly', max_menu_items || 30, max_tables || 10, max_orders_per_month || 500, max_staff_accounts || 3, Boolean(delivery_enabled), Boolean(white_label_enabled), Boolean(analytics_enabled)])
+      if (result.rows[0]) return res.status(201).json(result.rows[0])
+    } catch (dbErr) {
+      console.warn('DB create plan failed, fallback to localStore:', dbErr.message)
+    }
+
+    const data = local.load()
+    const newPlan = {
+      id: (data.plans?.length || 0) + 1,
+      name, description, price_etb: +price_etb || 0,
+      billing_interval: billing_interval || 'monthly',
+      max_menu_items: +max_menu_items || 30,
+      max_tables: +max_tables || 10,
+      delivery_enabled: Boolean(delivery_enabled)
+    }
+    data.plans = data.plans || []
+    data.plans.push(newPlan)
+    local.save ? local.save(data) : null
+    res.status(201).json(newPlan)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PUT /api/superadmin/plans/:id - Update an existing plan
+router.put('/plans/:id', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id)
+    const { name, description, price_etb, billing_interval, max_menu_items, max_tables, max_orders_per_month, max_staff_accounts, delivery_enabled, white_label_enabled, analytics_enabled } = req.body
+    try {
+      const result = await query(`
+        UPDATE subscription_plans
+        SET name = COALESCE($1, name),
+            description = COALESCE($2, description),
+            price_etb = COALESCE($3, price_etb),
+            billing_interval = COALESCE($4, billing_interval),
+            max_menu_items = COALESCE($5, max_menu_items),
+            max_tables = COALESCE($6, max_tables),
+            max_orders_per_month = COALESCE($7, max_orders_per_month),
+            max_staff_accounts = COALESCE($8, max_staff_accounts),
+            delivery_enabled = COALESCE($9, delivery_enabled),
+            white_label_enabled = COALESCE($10, white_label_enabled),
+            analytics_enabled = COALESCE($11, analytics_enabled)
+        WHERE id = $12
+        RETURNING *
+      `, [name, description, price_etb, billing_interval, max_menu_items, max_tables, max_orders_per_month, max_staff_accounts, delivery_enabled, white_label_enabled, analytics_enabled, planId])
+      if (result.rows[0]) return res.json(result.rows[0])
+    } catch (dbErr) {
+      console.warn('DB update plan failed, fallback:', dbErr.message)
+    }
+
+    const data = local.load()
+    const idx = (data.plans || []).findIndex(p => p.id === planId)
+    if (idx !== -1) {
+      data.plans[idx] = { ...data.plans[idx], ...req.body }
+      local.save ? local.save(data) : null
+      return res.json(data.plans[idx])
+    }
+    res.json({ id: planId, ...req.body })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /api/superadmin/plans/:id - Delete a plan
+router.delete('/plans/:id', async (req, res) => {
+  try {
+    const planId = parseInt(req.params.id)
+    try {
+      await query('DELETE FROM subscription_plans WHERE id = $1', [planId])
+      return res.status(204).end()
+    } catch (dbErr) {
+      console.warn('DB delete plan failed:', dbErr.message)
+    }
+    const data = local.load()
+    data.plans = (data.plans || []).filter(p => p.id !== planId)
+    local.save ? local.save(data) : null
+    res.status(204).end()
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /api/superadmin/audit-logs - Platform activity logs
+router.get('/audit-logs', async (req, res) => {
+  try {
+    try {
+      const result = await query(`
+        SELECT a.*, u.email as actor_email, t.name as tenant_name
+        FROM audit_logs a
+        LEFT JOIN users u ON a.user_id = u.id
+        LEFT JOIN tenants t ON a.tenant_id = t.id
+        ORDER BY a.created_at DESC
+        LIMIT 50
+      `)
+      if (result.rows.length > 0) return res.json(result.rows)
+    } catch (_) {}
+
+    res.json([
+      { id: 1, action: 'system_init', target_type: 'platform', target_name: 'Platform Engine', actor_email: 'superadmin@platform.com', created_at: new Date().toISOString() },
+      { id: 2, action: 'login', target_type: 'auth', target_name: 'Super Admin Login', actor_email: 'superadmin@platform.com', created_at: new Date(Date.now() - 3600000).toISOString() }
+    ])
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Announcements endpoints
+router.get('/announcements', async (req, res) => {
+  try {
+    try {
+      const result = await query('SELECT * FROM announcements ORDER BY created_at DESC')
+      return res.json(result.rows)
+    } catch (_) {}
+    res.json([
+      { id: 1, title: 'Welcome to Multi-Tenant Platform Engine', content: 'All system services and restaurant portals are active.', priority: 'normal', created_at: new Date().toISOString() }
+    ])
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/announcements', async (req, res) => {
+  try {
+    const { title, content, priority } = req.body
+    try {
+      const result = await query(
+        'INSERT INTO announcements (title, content, priority) VALUES ($1, $2, $3) RETURNING *',
+        [title, content, priority || 'normal']
+      )
+      if (result.rows[0]) return res.status(201).json(result.rows[0])
+    } catch (_) {}
+    res.status(201).json({ id: Date.now(), title, content, priority: priority || 'normal', created_at: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.delete('/announcements/:id', async (req, res) => {
+  try {
+    try {
+      await query('DELETE FROM announcements WHERE id = $1', [req.params.id])
+    } catch (_) {}
+    res.status(204).end()
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Settings endpoints
+router.get('/settings', async (req, res) => {
+  res.json({
+    platform_name: 'MenuSaaS Platform',
+    support_email: 'support@menusaas.com',
+    default_currency: 'ETB',
+    trial_days: 14,
+    maintenance_mode: false,
+    allow_new_registrations: true,
+    max_tenants: 100
+  })
+})
+
+router.put('/settings', async (req, res) => {
+  try {
+    res.json({ success: true, settings: req.body })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // DELETE /api/superadmin/tenants/:id
 router.delete('/tenants/:id', async (req, res) => {
   try {

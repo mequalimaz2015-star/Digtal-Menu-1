@@ -43,7 +43,7 @@ router.post('/', async (req, res) => {
       if (useDb2) {
         try {
           const countRes = await query(
-            `SELECT COUNT(*) AS cnt FROM orders WHERE tenant_id=$1 AND order_type='takeaway' AND created_at::date = CURRENT_DATE`,
+            `SELECT COUNT(*) AS cnt FROM orders WHERE tenant_id=$1 AND order_type='takeaway' AND DATE(created_at) = CURRENT_DATE`,
             [req.tenantId]
           )
           const todayCount = (parseInt(countRes.rows[0]?.cnt) || 0) + 1
