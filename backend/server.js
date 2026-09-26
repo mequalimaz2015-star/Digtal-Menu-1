@@ -8,7 +8,7 @@ app.use(cors({ origin: '*' }))
 app.use(express.json())
 
 // Routes
-app.use('/api/auth',       require('./routes/auth'))
+app.use('/api/auth',        require('./routes/auth'))
 app.use('/api/superadmin', require('./routes/superadmin'))
 app.use('/api/tenants',    require('./routes/tenants'))
 app.use('/api/delivery',   require('./routes/delivery'))
@@ -20,8 +20,8 @@ app.use('/api/tables',     require('./routes/tables'))
 app.use('/api/orders',     require('./routes/orders'))
 app.use('/api/users',      require('./routes/users'))
 app.use('/api/waiter-calls', require('./routes/waiterCalls'))
-app.use('/api/reviews',     require('./routes/reviews'))
-app.use('/api/chat',        require('./routes/chat'))
+app.use('/api/reviews',    require('./routes/reviews'))
+app.use('/api/chat',       require('./routes/chat'))
 
 app.get('/health', (req, res) => res.json({ status: 'healthy' }))
 app.get('/api/status', (req, res) => res.json({ message: 'ABC Restaurant API', status: 'running' }))
@@ -40,8 +40,10 @@ app.get('/api/network-info', (req, res) => {
   res.json({ localIp, port: process.env.PORT || 8000, frontendPort: 3000 })
 })
 
-// Serve frontend in production (Render) — must be AFTER all API routes
-if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
+// Serve frontend in production (Supports AletCloud & Render)
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER || process.env.ALETCLOUD || true;
+
+if (isProduction) {
   const frontendDist = path.join(__dirname, '..', 'frontend', 'dist')
   app.use(express.static(frontendDist))
   // SPA fallback: serve index.html for any non-API route
