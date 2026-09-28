@@ -9,7 +9,7 @@ const client = axios.create({
 })
 
 client.interceptors.request.use((config) => {
-  // Superadmin routes don't use tenant context — prioritize superadmin_token
+  // Superadmin routes do not use tenant context
   const isSuperAdminRequest = config.url?.includes('/superadmin')
   const token = isSuperAdminRequest
     ? (localStorage.getItem('superadmin_token') || localStorage.getItem('token'))
@@ -21,12 +21,32 @@ client.interceptors.request.use((config) => {
 
   if (isSuperAdminRequest) return config
 
-  // Detect tenant slug from path /r/:tenantSlug or localStorage
-  const pathMatch = window.location.pathname.match(/^\/r\/([^\/]+)/)
+  // Resolve tenant slug from (in priority order):
+  // 1. URL path  /r/:tenantSlug   (customer-facing routes)
+  // 2. localStorage 'tenant_slug' (set at admin login)
+  // 3. Decoded from the JWT itself (AletCloud: ensures slug is always available
+  //    even when localStorage was cleared or not set during login)
+  const pathMatch = window.location.pathname.match(/^\/r\/([^/]+)/)
   const pathSlug = pathMatch ? pathMatch[1] : null
   const storedSlug = localStorage.getItem('tenant_slug')
 
-  const tenantSlug = pathSlug || storedSlug
+  let tenantSlug = pathSlug || storedSlug
+
+  if (!tenantSlug && token && token !== 'demo-admin-token') {
+    try {
+      const parts = token.split('.')
+      if (parts.length === 3) {
+        const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+        const payload = JSON.parse(atob(padded + '=='.slice((padded.length % 4) || 4)))
+        if (payload.tenant_slug) {
+          tenantSlug = payload.tenant_slug
+          // Cache it so future requests don't need to decode again
+          localStorage.setItem('tenant_slug', tenantSlug)
+        }
+      }
+    } catch (_) {}
+  }
+
   if (tenantSlug) {
     config.headers['X-Tenant-Slug'] = tenantSlug
   }
@@ -37,7 +57,7 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle 401 Unauthorized for superadmin & admin routes without infinite loop
+    // Handle 401 Unauthorized for superadmin and admin routes without infinite loop
     if (error.response?.status === 401) {
       if (window.location.pathname.startsWith('/superadmin')) {
         localStorage.removeItem('superadmin_token')
@@ -56,4 +76,5 @@ client.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
 export default client

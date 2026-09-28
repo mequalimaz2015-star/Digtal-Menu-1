@@ -10,13 +10,35 @@ async function resolveTenant(req, res, next) {
   let slug = req.headers['x-tenant-slug'] || req.params.tenantSlug || req.query.tenantSlug
   let tenantId = req.headers['x-tenant-id'] || req.params.tenantId || req.query.tenantId
 
-  // JWT-based fallback: use the authenticated user's own tenant
-  if (!slug && !tenantId && req.user && req.user.tenant_id) {
-    tenantId = req.user.tenant_id
+  // JWT-based fallback: use the authenticated user's own tenant.
+  // req.user may already be set (if requireAuth ran first), or we decode the JWT here.
+  if (!slug && !tenantId) {
+    let userId = req.user?.tenant_id ?? null
+
+    // If req.user not yet populated, try to decode the JWT directly
+    if (userId == null) {
+      try {
+        const authHeader = req.headers.authorization
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const jwt = require('jsonwebtoken')
+          const token = authHeader.split(' ')[1]
+          const decoded = jwt.verify(
+            token,
+            process.env.JWT_SECRET || 'digital-menu-secret-key-2024-abc-restaurant'
+          )
+          if (decoded.tenant_slug) {
+            slug = decoded.tenant_slug
+          } else if (decoded.tenant_id) {
+            tenantId = decoded.tenant_id
+          }
+        }
+      } catch (_) {}
+    } else {
+      tenantId = userId
+    }
   }
 
-  // If still nothing — and no authenticated user — reject rather than silently
-  // defaulting to ABC Restaurant (tenant id=1) which would leak data.
+  // If still nothing — reject
   if (!slug && !tenantId) {
     return res.status(400).json({ error: 'Tenant context required. Provide X-Tenant-Slug header or authenticate.' })
   }
