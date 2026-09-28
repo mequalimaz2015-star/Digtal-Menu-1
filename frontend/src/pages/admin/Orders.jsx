@@ -118,13 +118,22 @@ export default function Orders() {
     return () => clearInterval(intervalRef.current)
   }, [fetchOrders])
 
-  // Also listen for localStorage events (same-device ordering)
+  // Real-time: Socket.io for cross-device updates + localStorage for same-device
   useEffect(() => {
+    const { io } = require('socket.io-client')
+    const socket = io('/', { transports: ['websocket', 'polling'] })
+    socket.on('new_order', () => fetchOrders(true))
+    socket.on('order_status_updated', () => fetchOrders(true))
+
     const handler = (e) => {
-      if (e.key === 'new-order-event') fetchOrders(true)
+      if (e.key === 'new-order-event' || e.key === 'order-status-event') fetchOrders(true)
     }
     window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
+
+    return () => {
+      socket.disconnect()
+      window.removeEventListener('storage', handler)
+    }
   }, [fetchOrders])
 
   // ── Update order status ───────────────────────

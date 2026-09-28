@@ -13,6 +13,7 @@ import NotificationBell from '../../components/admin/NotificationBell'
 import WaiterCallsMonitor from '../../components/admin/WaiterCallsMonitor'
 import { useRestaurantStore } from '../../store/useRestaurantStore'
 import { useMenuStore } from '../../store/useMenuStore'
+import { useOrderStore } from '../../store/useOrderStore'
 import { useRole } from '../../hooks/useRole'
 
 // ── Full nav definition — each item tagged with roles that can see it ─────────
@@ -79,6 +80,7 @@ export default function AdminLayout() {
   const { darkMode, toggleDarkMode } = useAppStore()
   const { info, fetchRestaurant } = useRestaurantStore()
   const { fetchAll } = useMenuStore()
+  const { unreadCount, markAllRead } = useOrderStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [chatUnread, setChatUnread]   = useState(0)
   const { role, perms, user, canAccess } = useRole()
@@ -91,10 +93,22 @@ export default function AdminLayout() {
     fetchAll()
   }, [fetchRestaurant, fetchAll])
 
-  // Listen for new chat messages to show unread badge in topbar
+  // Single socket connection for all admin real-time events
   useEffect(() => {
     const socket = io('/', { transports: ['websocket', 'polling'] })
+
+    // New chat message → unread badge in topbar
     socket.on('chat_new_message', () => setChatUnread(n => n + 1))
+
+    // New order from ANY device → trigger admin pages to refresh
+    // Dashboard, Orders, KitchenDisplay all poll on interval but this
+    // fires immediately for instant cross-device update
+    socket.on('new_order', () => {
+      // Dispatch a storage event so Orders/KitchenDisplay refresh immediately
+      // (they listen to 'new-order-event' for same-device, this bridges the gap)
+      window.dispatchEvent(new StorageEvent('storage', { key: 'new-order-event', newValue: JSON.stringify({ ts: Date.now() }) }))
+    })
+
     return () => socket.disconnect()
   }, [])
 

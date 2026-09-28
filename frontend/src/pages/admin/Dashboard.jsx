@@ -66,8 +66,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchOrders()
-    const iv = setInterval(fetchOrders, 8000)
-    return () => clearInterval(iv)
+    const iv = setInterval(fetchOrders, 5000)
+
+    // Real-time socket for instant cross-device updates
+    const { io } = require('socket.io-client')
+    const socket = io('/', { transports: ['websocket', 'polling'] })
+    socket.on('new_order', fetchOrders)
+    socket.on('order_status_updated', fetchOrders)
+
+    return () => { clearInterval(iv); socket.disconnect() }
   }, [fetchOrders])
 
   // Live computed stats

@@ -83,9 +83,17 @@ export default function KitchenDisplay() {
     return () => clearInterval(intervalRef.current)
   }, [fetchOrders])
   useEffect(() => {
+    const { io } = require('socket.io-client')
+    const socket = io('/', { transports: ['websocket', 'polling'] })
+    socket.on('new_order', () => fetchOrders(true))
+    socket.on('order_status_updated', () => fetchOrders(true))
+
     const handler = (e) => { if (e.key === 'new-order-event') fetchOrders(true) }
     window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
+    return () => {
+      socket.disconnect()
+      window.removeEventListener('storage', handler)
+    }
   }, [fetchOrders])
 
   const advance = async (order) => {

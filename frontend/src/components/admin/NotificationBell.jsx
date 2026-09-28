@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FiBell, FiX, FiCheck, FiTrash2, FiPackage } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { useOrderStore } from '../../store/useOrderStore'
+import { io } from 'socket.io-client'
 import toast from 'react-hot-toast'
 
 function timeAgo(iso) {
@@ -26,51 +27,75 @@ export default function NotificationBell() {
   const navigate = useNavigate()
   const { notifications, unreadCount, markAllRead, markNotificationRead, clearNotifications } = useOrderStore()
 
-  // Listen for new orders from OTHER tabs (customer ordering)
+  // Listen for new orders from ALL devices via Socket.io (cross-device)
+  // AND from same-device other tabs via localStorage
   useEffect(() => {
+    // ── Socket.io: fires on ANY device when a customer places an order ──────
+    const socket = io('/', { transports: ['websocket', 'polling'] })
+
+    const handleNewOrder = (order) => {
+      // Play notification sound
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)()
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain); gain.connect(ctx.destination)
+        osc.frequency.value = 880; osc.type = 'sine'
+        gain.gain.setValueAtTime(0.4, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
+        osc.start(); osc.stop(ctx.currentTime + 0.8)
+      } catch (_) {}
+
+      const tableNum   = order.table_number || order.tableNumber || '?'
+      const total      = (order.grand_total || order.grandTotal || 0).toFixed(0)
+      const itemsCount = (order.items || []).length
+      const customer   = order.customer_name || order.customerName || 'Guest'
+
+      toast.custom((t) => (
+        <motion.div
+          initial={{ opacity: 0, y: -50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -20 }}
+          className={`${t.visible ? 'opacity-100' : 'opacity-0'} bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-orange-400 p-4 flex items-start gap-3 max-w-sm`}
+        >
+          <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
+            🛎️
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-gray-900 dark:text-white">New Order!</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Table {tableNum} · {total} ETB
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              {itemsCount} items · {customer}
+            </p>
+          </div>
+          <button onClick={() => toast.dismiss(t.id)} className="text-gray-400 hover:text-gray-600 mt-0.5">
+            <FiX size={16} />
+          </button>
+        </motion.div>
+      ), { duration: 8000, position: 'top-right' })
+    }
+
+    socket.on('new_order', handleNewOrder)
+    // Also listen to tenant-scoped events if emitted
+    socket.on('tenant-new-order', handleNewOrder)
+
+    // ── localStorage: fires only in other same-device tabs ───────────────────
     const handleStorage = (e) => {
       if (e.key === 'new-order-event' && e.newValue) {
-        const { order } = JSON.parse(e.newValue)
-        // Play sound
         try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)()
-          const osc = ctx.createOscillator()
-          const gain = ctx.createGain()
-          osc.connect(gain); gain.connect(ctx.destination)
-          osc.frequency.value = 880; osc.type = 'sine'
-          gain.gain.setValueAtTime(0.4, ctx.currentTime)
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
-          osc.start(); osc.stop(ctx.currentTime + 0.8)
-        } catch (_) { }
-        // Show toast
-        toast.custom((t) => (
-          <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`${t.visible ? 'opacity-100' : 'opacity-0'} bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-orange-400 p-4 flex items-start gap-3 max-w-sm`}
-          >
-            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
-              🛎️
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-black text-gray-900 dark:text-white">New Order!</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Table {order.tableNumber} · {order.grandTotal?.toFixed(0)} ETB
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                {order.items?.length} items · {order.customerName || 'Guest'}
-              </p>
-            </div>
-            <button onClick={() => toast.dismiss(t.id)} className="text-gray-400 hover:text-gray-600 mt-0.5">
-              <FiX size={16} />
-            </button>
-          </motion.div>
-        ), { duration: 8000, position: 'top-right' })
+          const { order } = JSON.parse(e.newValue)
+          handleNewOrder(order)
+        } catch (_) {}
       }
     }
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+
+    return () => {
+      socket.disconnect()
+      window.removeEventListener('storage', handleStorage)
+    }
   }, [])
   // Close on outside click
   useEffect(() => {

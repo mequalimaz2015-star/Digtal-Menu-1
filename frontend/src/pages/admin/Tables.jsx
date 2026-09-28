@@ -1,14 +1,35 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiPlus, FiEdit2, FiTrash2, FiX, FiSave } from 'react-icons/fi'
+import { FiPlus, FiEdit2, FiTrash2, FiX, FiSave, FiRefreshCw } from 'react-icons/fi'
+import { io } from 'socket.io-client'
 import toast from 'react-hot-toast'
 import { useMenuStore } from '../../store/useMenuStore'
 
 export default function Tables() {
-  const { tables, addTable, updateTable, deleteTable } = useMenuStore()
+  const { tables, addTable, updateTable, deleteTable, fetchAll } = useMenuStore()
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ number: '', capacity: 4, status: 'available' })
+
+  // Fetch fresh table data on mount and whenever an order status changes
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+
+  // Socket.io: refresh tables whenever an order is placed or status changes
+  // (backend auto-sets table occupied/available when orders are placed/served)
+  useEffect(() => {
+    const socket = io('/', { transports: ['websocket', 'polling'] })
+
+    const refresh = () => fetchAll()
+
+    // New order placed → a table becomes occupied
+    socket.on('new_order', refresh)
+    // Order status changed → a table may become available again (served/cancelled)
+    socket.on('order_status_updated', refresh)
+
+    return () => socket.disconnect()
+  }, [fetchAll])
 
   const openAdd = () => {
     setEditing(null)
@@ -70,9 +91,14 @@ export default function Tables() {
             {tables.length} total · {tables.filter(t => t.status === 'available').length} available
           </p>
         </div>
-        <button onClick={openAdd} className="btn-primary">
-          <FiPlus size={18} /> Add Table
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => fetchAll()} className="btn-secondary flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-bold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+            <FiRefreshCw size={15} /> Refresh
+          </button>
+          <button onClick={openAdd} className="btn-primary">
+            <FiPlus size={18} /> Add Table
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
