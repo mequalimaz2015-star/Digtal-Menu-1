@@ -6,7 +6,7 @@ const local = require('../localStore')
 
 router.use(resolveTenant)
 
-// Track DB connectivity — only reset on actual connection failures, not query errors
+// DB connectivity probe — only reset on real connection failures
 let dbAvailable = null
 
 async function checkDb() {
@@ -23,10 +23,10 @@ async function checkDb() {
 
 function isConnError(err) {
   const msg = (err?.message || '').toLowerCase()
-  return msg.includes('connect') || msg.includes('econnrefused') || msg.includes('offline') || msg.includes('not configured')
+  return msg.includes('connect') || msg.includes('econnrefused') ||
+         msg.includes('offline')  || msg.includes('not configured')
 }
 
-// Re-probe every 30s
 setInterval(() => { dbAvailable = null }, 30000)
 
 // ── POST /api/orders ──────────────────────────────────────────────────────────
@@ -35,21 +35,19 @@ router.post('/', async (req, res) => {
     const {
       tableNumber, customerName, phone, notes, items, subtotal, vat, serviceCharge,
       grandTotal, estimatedTime, orderType, pickupTime, deliveryAddress, deliveryLat,
-      deliveryLng, deliveryFee, deliveryZoneId, paymentMethod
+      deliveryLng, deliveryFee, deliveryZoneId, paymentMethod,
     } = req.body
 
     if (!items || !items.length) return res.status(400).json({ error: 'Items required' })
 
-    const orderRef       = `ORD-${Date.now()}`
-    const validTypes     = ['dine_in', 'takeaway', 'delivery']
-    const resolvedType   = validTypes.includes(orderType) ? orderType : 'dine_in'
+    const orderRef     = `ORD-${Date.now()}`
+    const validTypes   = ['dine_in', 'takeaway', 'delivery']
+    const resolvedType = validTypes.includes(orderType) ? orderType : 'dine_in'
 
-    // Generate pickup number for takeaway
     let pickupNumber = null
     if (resolvedType === 'takeaway') {
       try {
         if (await checkDb()) {
-          // CURDATE() works on MySQL; for PostgreSQL use CURRENT_DATE — db.js toMySQL strips ::casts
           const cr = await query(
             `SELECT COUNT(*) AS cnt FROM orders WHERE tenant_id=$1 AND order_type='takeaway' AND created_at >= CURDATE()`,
             [req.tenantId]
@@ -113,9 +111,16 @@ router.post('/', async (req, res) => {
           ])
         }
 
-        const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [order.id])
-        const finalOrder = { ...order, items: ir.rows }
+        // Fetch items back for the response
+        let orderItems = []
+        try {
+          const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [order.id])
+          orderItems = ir.rows
+        } catch (_) {}
 
+        const finalOrder = { ...order, items: orderItems }
+
+        // Mark table as occupied
         if (resolvedType === 'dine_in' && tableNumber) {
           query(`UPDATE tables SET status='occupied' WHERE number=$1 AND tenant_id=$2`, [String(tableNumber), req.tenantId]).catch(() => {})
         }
@@ -128,12 +133,16 @@ router.post('/', async (req, res) => {
 
         return res.status(201).json(finalOrder)
       } catch (dbErr) {
-        console.warn('DB write failed in POST /orders, falling back:', dbErr.message)
+        console.error('❌ DB write failed in POST /orders:', dbErr.message)
         if (isConnError(dbErr)) dbAvailable = false
+        // Fall through to localStore only on connection errors
+        if (!isConnError(dbErr)) {
+          return res.status(500).json({ error: 'Failed to save order: ' + dbErr.message })
+        }
       }
     }
 
-    // localStore fallback
+    // localStore fallback (only when DB truly offline)
     const localOrder = local.createOrder({
       orderRef, tenantId: req.tenantId,
       tableNumber: resolvedType === 'dine_in' ? tableNumber : resolvedType,
@@ -149,6 +158,7 @@ router.post('/', async (req, res) => {
     return res.status(201).json(local.getOrderById(localOrder.id))
 
   } catch (err) {
+    console.error('❌ POST /orders unhandled error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })
@@ -157,11 +167,12 @@ router.post('/', async (req, res) => {
 router.get('/', requireAuth, requireTenantMatch, async (req, res) => {
   try {
     const { status, type } = req.query
+    const tid = Number(req.tenantId) || req.tenantId  // ensure numeric
 
     if (await checkDb()) {
       try {
         let sql    = `SELECT * FROM orders WHERE tenant_id = $1`
-        const params = [req.tenantId]
+        const params = [tid]
         let idx    = 2
 
         if (status) { sql += ` AND status=$${idx++}`;     params.push(status) }
@@ -169,26 +180,35 @@ router.get('/', requireAuth, requireTenantMatch, async (req, res) => {
         sql += ` ORDER BY created_at DESC`
 
         const ordersResult = await query(sql, params)
-        const orders = ordersResult.rows
+        const orders = ordersResult.rows || []
 
-        // Attach items — fetch one-by-one to avoid MySQL IN ($1,$2) array issues
+        // Fetch items per order — individual queries avoid IN($1,$2) array issues on MySQL
         for (const o of orders) {
           try {
             const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [o.id])
-            o.items = ir.rows
-          } catch (_) { o.items = [] }
+            o.items = ir.rows || []
+          } catch (itemErr) {
+            console.warn(`Could not fetch items for order ${o.id}:`, itemErr.message)
+            o.items = []
+          }
         }
 
         return res.json(orders)
       } catch (dbErr) {
-        console.warn('DB read failed in GET /orders:', dbErr.message)
-        if (isConnError(dbErr)) dbAvailable = false
-        // Fall through to localStore
+        console.error('❌ DB read failed in GET /orders:', dbErr.message, '| tenantId:', tid)
+        if (isConnError(dbErr)) {
+          dbAvailable = false
+        } else {
+          // Non-connection DB error — return 500 with details so we can diagnose
+          return res.status(500).json({ error: 'Order fetch failed: ' + dbErr.message })
+        }
       }
     }
 
-    return res.json(local.getOrders(status, req.tenantId))
+    // Only reach here when DB is truly offline
+    return res.json(local.getOrders(status, tid))
   } catch (err) {
+    console.error('❌ GET /orders unhandled error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })
@@ -196,19 +216,24 @@ router.get('/', requireAuth, requireTenantMatch, async (req, res) => {
 // ── GET /api/orders/:id ───────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
+    const tid = Number(req.tenantId) || req.tenantId
     if (await checkDb()) {
       try {
         const idVal     = parseInt(req.params.id) || 0
         const ordResult = await query(
           `SELECT * FROM orders WHERE tenant_id=$1 AND (id=$2 OR order_ref=$3)`,
-          [req.tenantId, idVal, req.params.id]
+          [tid, idVal, req.params.id]
         )
         if (ordResult.rows[0]) {
           const order = ordResult.rows[0]
-          const ir    = await query(`SELECT * FROM order_items WHERE order_id=$1`, [order.id])
-          return res.json({ ...order, items: ir.rows })
+          try {
+            const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [order.id])
+            order.items = ir.rows || []
+          } catch (_) { order.items = [] }
+          return res.json(order)
         }
       } catch (dbErr) {
+        console.warn('GET /orders/:id DB error:', dbErr.message)
         if (isConnError(dbErr)) dbAvailable = false
       }
     }
@@ -225,21 +250,24 @@ router.get('/:id', async (req, res) => {
 router.put('/:id/status', requireAuth, requireTenantMatch, async (req, res) => {
   try {
     const { status, delivery_status } = req.body
+    const tid = Number(req.tenantId) || req.tenantId
     const validStatuses = ['new', 'preparing', 'ready', 'served', 'completed', 'cancelled']
     if (status && !validStatuses.includes(status))
       return res.status(400).json({ error: 'Invalid status' })
 
     if (await checkDb()) {
       try {
-        // Use explicit SET to avoid COALESCE issues with MySQL null handling
+        // Build explicit SET clause to avoid COALESCE issues on MySQL
         const setClauses = []
         const params     = []
         let idx          = 1
 
         if (status)          { setClauses.push(`status=$${idx++}`);          params.push(status) }
         if (delivery_status) { setClauses.push(`delivery_status=$${idx++}`); params.push(delivery_status) }
+        if (!setClauses.length) return res.status(400).json({ error: 'No status provided' })
+
         setClauses.push(`updated_at=NOW()`)
-        params.push(parseInt(req.params.id), req.tenantId)
+        params.push(parseInt(req.params.id), tid)
 
         const result = await query(
           `UPDATE orders SET ${setClauses.join(', ')} WHERE id=$${idx++} AND tenant_id=$${idx} RETURNING *`,
@@ -248,14 +276,16 @@ router.put('/:id/status', requireAuth, requireTenantMatch, async (req, res) => {
 
         const updatedOrder = result.rows[0]
         if (updatedOrder) {
+          // Free the table if order is complete
           if (updatedOrder.table_number && ['served', 'completed', 'cancelled'].includes(status)) {
             try {
               const ac = await query(
-                `SELECT COUNT(*) as count FROM orders WHERE tenant_id=$1 AND table_number=$2 AND status IN ('new','preparing','ready')`,
-                [req.tenantId, updatedOrder.table_number]
+                `SELECT COUNT(*) as cnt FROM orders WHERE tenant_id=$1 AND table_number=$2 AND status IN ('new','preparing','ready')`,
+                [tid, updatedOrder.table_number]
               )
-              if (parseInt(ac.rows[0]?.count ?? ac.rows[0]?.cnt ?? 0) === 0) {
-                await query(`UPDATE tables SET status='available' WHERE number=$1 AND tenant_id=$2`, [updatedOrder.table_number, req.tenantId])
+              const cnt = parseInt(ac.rows[0]?.cnt ?? ac.rows[0]?.count ?? 0)
+              if (cnt === 0) {
+                await query(`UPDATE tables SET status='available' WHERE number=$1 AND tenant_id=$2`, [updatedOrder.table_number, tid])
               }
             } catch (_) {}
           }
@@ -263,12 +293,12 @@ router.put('/:id/status', requireAuth, requireTenantMatch, async (req, res) => {
           if (io) {
             io.emit('order_status_updated', updatedOrder)
             io.emit(`order-${updatedOrder.order_ref}`, updatedOrder)
-            io.emit(`tenant-${req.tenantId}-order-update`, updatedOrder)
+            io.emit(`tenant-${tid}-order-update`, updatedOrder)
           }
           return res.json(updatedOrder)
         }
       } catch (dbErr) {
-        console.warn('DB update failed in PUT /orders/:id/status:', dbErr.message)
+        console.warn('PUT /orders/:id/status DB error:', dbErr.message)
         if (isConnError(dbErr)) dbAvailable = false
       }
     }
@@ -286,15 +316,15 @@ router.put('/:id/status', requireAuth, requireTenantMatch, async (req, res) => {
 // ── DELETE /api/orders/:id ────────────────────────────────────────────────────
 router.delete('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {
-    const id = parseInt(req.params.id)
+    const id  = parseInt(req.params.id)
+    const tid = Number(req.tenantId) || req.tenantId
     if (await checkDb()) {
       try {
-        // Delete items first (FK), then the order
         await query(`DELETE FROM order_items WHERE order_id=$1`, [id])
-        await query(`DELETE FROM orders WHERE id=$1 AND tenant_id=$2`, [id, req.tenantId])
+        await query(`DELETE FROM orders WHERE id=$1 AND tenant_id=$2`, [id, tid])
         return res.status(204).end()
       } catch (dbErr) {
-        console.warn('DB delete failed in DELETE /orders:', dbErr.message)
+        console.warn('DELETE /orders/:id DB error:', dbErr.message)
         if (isConnError(dbErr)) dbAvailable = false
       }
     }

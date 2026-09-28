@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import client from '../api/client'
 
-// Use Vite proxy path so it works on both PC and mobile
+// Use the axios client so X-Tenant-Slug and Authorization headers
+// are automatically attached via the request interceptor
 const API_URL = '/api'
 
 function playBeep() {
@@ -28,47 +30,31 @@ export const useOrderStore = create(
       // ── Customer places order → saved to SQL Server via API ──
       placeOrder: async (orderData) => {
         try {
-          const res = await fetch(`${API_URL}/orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(orderData),
-          })
+          const res = await client.post('/orders', orderData)
+          const savedOrder = res.data
 
-          if (!res.ok) throw new Error('API error')
-          const savedOrder = await res.json()
-
-          // Also keep locally for order confirmation page
           const localOrder = {
             ...orderData,
-            id:           savedOrder.order_ref || savedOrder.id?.toString() || `ORD-${Date.now()}`,
-            dbId:         savedOrder.id,
-            // carry all takeaway fields back from the server response
-            pickup_number:   savedOrder.pickup_number   || '',
-            pickup_time:     savedOrder.pickup_time     || orderData.pickupTime || '',
-            order_type:      savedOrder.order_type      || orderData.orderType  || 'dine_in',
+            id:               savedOrder.order_ref || savedOrder.id?.toString() || `ORD-${Date.now()}`,
+            dbId:             savedOrder.id,
+            pickup_number:    savedOrder.pickup_number    || '',
+            pickup_time:      savedOrder.pickup_time      || orderData.pickupTime || '',
+            order_type:       savedOrder.order_type       || orderData.orderType  || 'dine_in',
             delivery_address: savedOrder.delivery_address || orderData.deliveryAddress || '',
-            delivery_lat:    savedOrder.delivery_lat    || orderData.deliveryLat || null,
-            delivery_lng:    savedOrder.delivery_lng    || orderData.deliveryLng || null,
-            status:       'new',
-            createdAt:    savedOrder.created_at || new Date().toISOString(),
-            readByAdmin:  false,
+            delivery_lat:     savedOrder.delivery_lat     || orderData.deliveryLat || null,
+            delivery_lng:     savedOrder.delivery_lng     || orderData.deliveryLng || null,
+            status:           'new',
+            createdAt:        savedOrder.created_at || new Date().toISOString(),
+            readByAdmin:      false,
           }
 
-          set(s => ({
-            orders: [localOrder, ...s.orders].slice(0, 100),
-          }))
+          set(s => ({ orders: [localOrder, ...s.orders].slice(0, 100) }))
 
-          // Broadcast to admin tabs on same device
-          localStorage.setItem('new-order-event', JSON.stringify({
-            order: localOrder,
-            ts: Date.now(),
-          }))
-
+          localStorage.setItem('new-order-event', JSON.stringify({ order: localOrder, ts: Date.now() }))
           playBeep()
           return localOrder
 
         } catch (err) {
-          // Fallback: save locally if API unreachable
           console.warn('API unavailable, saving locally:', err.message)
           const localOrder = {
             ...orderData,
@@ -97,14 +83,12 @@ export const useOrderStore = create(
         }
       },
 
-      // ── Admin fetches all orders from SQL Server ──
+      // ── Admin fetches all orders from API ──
       fetchOrders: async (token) => {
         try {
-          const res = await fetch(`${API_URL}/orders`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          })
-          if (!res.ok) return
-          const data = await res.json()
+          // Use axios client so X-Tenant-Slug is always attached
+          const res = await client.get('/orders')
+          const data = res.data
 
           // Map API orders to frontend format
           const mapped = data.map(o => ({
@@ -175,14 +159,7 @@ export const useOrderStore = create(
 
         if (dbId && token) {
           try {
-            await fetch(`${API_URL}/orders/${dbId}/status`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ status }),
-            })
+            await client.put(`/orders/${dbId}/status`, { status })
           } catch (err) {
             console.warn('Could not update order status via API:', err.message)
           }
