@@ -26,22 +26,30 @@ export default function ModifierGroups() {
     setShowGroupModal(true)
   }
 
-  const handleSaveGroup = () => {
+  const handleSaveGroup = async () => {
     if (!groupForm.name.trim()) { toast.error('Name is required'); return }
-    if (editingGroup) {
-      updateModifierGroup(editingGroup.id, groupForm)
-      toast.success('✅ Group updated')
-    } else {
-      addModifierGroup(groupForm)
-      toast.success('✅ Group created')
+    try {
+      if (editingGroup) {
+        await updateModifierGroup(editingGroup.id, groupForm)
+        toast.success('✅ Group updated')
+      } else {
+        await addModifierGroup(groupForm)
+        toast.success('✅ Group created')
+      }
+      setShowGroupModal(false)
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to save group')
     }
-    setShowGroupModal(false)
   }
 
-  const handleDeleteGroup = (group) => {
+  const handleDeleteGroup = async (group) => {
     if (!confirm(`Delete "${group.name}"?`)) return
-    deleteModifierGroup(group.id)
-    toast.success('🗑️ Deleted')
+    try {
+      await deleteModifierGroup(group.id)
+      toast.success('🗑️ Deleted')
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to delete group')
+    }
   }
 
   const openAddModifier = (group) => {
@@ -58,22 +66,30 @@ export default function ModifierGroups() {
     setShowModModal(true)
   }
 
-  const handleSaveMod = () => {
+  const handleSaveMod = async () => {
     if (!modForm.name.trim()) { toast.error('Name is required'); return }
-    if (editingMod) {
-      updateModifier(activeGroup.id, editingMod.id, modForm)
-      toast.success('✅ Modifier updated')
-    } else {
-      addModifier(activeGroup.id, modForm)
-      toast.success('✅ Modifier added')
+    try {
+      if (editingMod) {
+        await updateModifier(activeGroup.id, editingMod.id, modForm)
+        toast.success('✅ Modifier updated')
+      } else {
+        await addModifier(activeGroup.id, modForm)
+        toast.success('✅ Modifier added')
+      }
+      setShowModModal(false)
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to save modifier')
     }
-    setShowModModal(false)
   }
 
-  const handleDeleteMod = (group, mod) => {
+  const handleDeleteMod = async (group, mod) => {
     if (!confirm(`Delete "${mod.name}"?`)) return
-    deleteModifier(group.id, mod.id)
-    toast.success('🗑️ Deleted')
+    try {
+      await deleteModifier(group.id, mod.id)
+      toast.success('🗑️ Deleted')
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to delete modifier')
+    }
   }
 
   const [expanded, setExpanded] = useState({})

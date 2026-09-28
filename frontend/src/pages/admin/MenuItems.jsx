@@ -130,7 +130,7 @@ export default function MenuItems() {
     setShowModal(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) { toast.error('Name is required'); return }
     if (!form.price || isNaN(form.price) || Number(form.price) <= 0) { toast.error('Valid price required'); return }
     if (!form.categoryId) { toast.error('Select a category'); return }
@@ -145,20 +145,28 @@ export default function MenuItems() {
       allergens: form.allergens.split(',').map(s => s.trim()).filter(Boolean),
     }
 
-    if (editing) {
-      updateMenuItem(editing.id, payload)
-      toast.success('✅ Item updated')
-    } else {
-      addMenuItem(payload)
-      toast.success('✅ Item added')
+    try {
+      if (editing) {
+        await updateMenuItem(editing.id, payload)
+        toast.success('✅ Item updated')
+      } else {
+        await addMenuItem(payload)
+        toast.success('✅ Item added')
+      }
+      setShowModal(false)
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to save item')
     }
-    setShowModal(false)
   }
 
-  const handleDelete = (item) => {
+  const handleDelete = async (item) => {
     if (!confirm(`Delete "${item.name}"?`)) return
-    deleteMenuItem(item.id)
-    toast.success('🗑️ Deleted')
+    try {
+      await deleteMenuItem(item.id)
+      toast.success('🗑️ Deleted')
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to delete item')
+    }
   }
 
   const getCat = (catId) => categories.find(c => c.id === catId || String(c.id) === String(catId))
@@ -255,7 +263,7 @@ export default function MenuItems() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <button onClick={() => toggleAvailable(item.id)} className={`toggle-btn ${item.isAvailable ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                        <button onClick={async () => { try { await toggleAvailable(item.id) } catch { toast.error('Failed to update') } }} className={`toggle-btn ${item.isAvailable ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                           <span className={`toggle-dot ${item.isAvailable ? 'left-5' : 'left-0.5'}`} />
                         </button>
                       </td>

@@ -230,35 +230,30 @@ function makeStore(set, get) {
 
     // ── Categories ──────────────────────────────────────────────────────────
     addCategory: async (data) => {
-      try {
-        const res = await client.post('/categories', {
-          name: data.name, name_am: data.nameAm, icon: data.icon,
-          color: data.color, sort_order: data.sortOrder,
-        })
-        const c = res.data
-        set(s => ({
-          categories: [...s.categories, {
-            id: String(c.id), name: c.name, nameAm: c.name_am || '',
-            icon: c.icon, color: c.color, sortOrder: c.sort_order ?? 0, isActive: true,
-          }]
-        }))
-      } catch { /* silently handled by caller */ }
+      const res = await client.post('/categories', {
+        name: data.name, name_am: data.nameAm, icon: data.icon,
+        color: data.color, sort_order: data.sortOrder,
+      })
+      const c = res.data
+      set(s => ({
+        categories: [...s.categories, {
+          id: String(c.id), name: c.name, nameAm: c.name_am || '',
+          icon: c.icon, color: c.color, sortOrder: c.sort_order ?? 0, isActive: true,
+        }]
+      }))
     },
 
     updateCategory: async (id, data) => {
       set(s => ({ categories: s.categories.map(c => c.id === id ? { ...c, ...data } : c) }))
-      try {
-        await client.put(`/categories/${id}`, {
-          name: data.name, name_am: data.nameAm, icon: data.icon,
-          color: data.color, sort_order: data.sortOrder, is_active: data.isActive,
-        })
-      } catch { await get().fetchAll() }
+      await client.put(`/categories/${id}`, {
+        name: data.name, name_am: data.nameAm, icon: data.icon,
+        color: data.color, sort_order: data.sortOrder, is_active: data.isActive,
+      })
     },
 
     deleteCategory: async (id) => {
       set(s => ({ categories: s.categories.filter(c => c.id !== id) }))
-      try { await client.delete(`/categories/${id}`) }
-      catch { await get().fetchAll() }
+      await client.delete(`/categories/${id}`)
     },
 
     toggleCategory: async (id) => {
@@ -266,68 +261,61 @@ function makeStore(set, get) {
       if (!cat) return
       const next = !cat.isActive
       set(s => ({ categories: s.categories.map(c => c.id === id ? { ...c, isActive: next } : c) }))
-      try {
-        await client.put(`/categories/${id}`, {
-          name: cat.name, name_am: cat.nameAm, icon: cat.icon,
-          color: cat.color, sort_order: cat.sortOrder, is_active: next,
-        })
-      } catch { await get().fetchAll() }
+      await client.put(`/categories/${id}`, {
+        name: cat.name, name_am: cat.nameAm, icon: cat.icon,
+        color: cat.color, sort_order: cat.sortOrder, is_active: next,
+      })
     },
 
     // ── Menu Items ───────────────────────────────────────────────────────────
     addMenuItem: async (data) => {
-      try {
-        const res = await client.post('/menu-items', {
-          category_id: data.categoryId, name: data.name, name_am: data.nameAm,
-          description: data.description, description_am: data.descriptionAm,
-          price: data.price, image_url: data.image, prep_time: data.prepTime,
-          is_spicy: data.isSpicy, is_vegetarian: data.isVegetarian,
-          is_available: data.isAvailable, is_featured: data.isFeatured,
-          is_popular: data.isPopular, is_best_seller: data.isBestSeller,
-          chef_recommended: data.chefRecommended, rating: data.rating,
-          calories: data.calories, discount: data.discount,
-          allergens: Array.isArray(data.allergens) ? data.allergens.join(',') : data.allergens,
-        })
-        const i = res.data
-        set(s => ({
-          menuItems: [...s.menuItems, {
-            id: String(i.id), categoryId: String(i.category_id),
-            name: i.name, nameAm: i.name_am || '',
-            description: i.description || '', descriptionAm: i.description_am || '',
-            price: Number(i.price), image: i.image_url || '',
-            prepTime: i.prep_time || 15, isSpicy: !!i.is_spicy,
-            isVegetarian: !!i.is_vegetarian, isAvailable: i.is_available !== false,
-            isFeatured: !!i.is_featured, isPopular: !!i.is_popular,
-            isBestSeller: !!i.is_best_seller, chefRecommended: !!i.chef_recommended,
-            rating: Number(i.rating) || 4.5, reviewCount: 0,
-            calories: i.calories || null, discount: Number(i.discount) || 0,
-            allergens: i.allergens ? String(i.allergens).split(',').map(s => s.trim()).filter(Boolean) : [],
-          }]
-        }))
-      } catch { /* handled by caller */ }
+      const res = await client.post('/menu-items', {
+        category_id: data.categoryId, name: data.name, name_am: data.nameAm,
+        description: data.description, description_am: data.descriptionAm,
+        price: data.price, image_url: data.image, prep_time: data.prepTime,
+        is_spicy: data.isSpicy, is_vegetarian: data.isVegetarian,
+        is_available: data.isAvailable, is_featured: data.isFeatured,
+        is_popular: data.isPopular, is_best_seller: data.isBestSeller,
+        chef_recommended: data.chefRecommended, rating: data.rating,
+        calories: data.calories, discount: data.discount,
+        allergens: Array.isArray(data.allergens) ? data.allergens.join(',') : data.allergens,
+      })
+      const i = res.data
+      set(s => ({
+        menuItems: [...s.menuItems, {
+          id: String(i.id), categoryId: String(i.category_id),
+          name: i.name, nameAm: i.name_am || '',
+          description: i.description || '', descriptionAm: i.description_am || '',
+          price: Number(i.price), image: i.image_url || '',
+          prepTime: i.prep_time || 15, isSpicy: !!i.is_spicy,
+          isVegetarian: !!i.is_vegetarian, isAvailable: i.is_available !== false,
+          isFeatured: !!i.is_featured, isPopular: !!i.is_popular,
+          isBestSeller: !!i.is_best_seller, chefRecommended: !!i.chef_recommended,
+          rating: Number(i.rating) || 4.5, reviewCount: 0,
+          calories: i.calories || null, discount: Number(i.discount) || 0,
+          allergens: i.allergens ? String(i.allergens).split(',').map(s => s.trim()).filter(Boolean) : [],
+        }]
+      }))
     },
 
     updateMenuItem: async (id, data) => {
       set(s => ({ menuItems: s.menuItems.map(i => i.id === id ? { ...i, ...data } : i) }))
-      try {
-        await client.put(`/menu-items/${id}`, {
-          category_id: data.categoryId, name: data.name, name_am: data.nameAm,
-          description: data.description, description_am: data.descriptionAm,
-          price: data.price, image_url: data.image, prep_time: data.prepTime,
-          is_spicy: data.isSpicy, is_vegetarian: data.isVegetarian,
-          is_available: data.isAvailable, is_featured: data.isFeatured,
-          is_popular: data.isPopular, is_best_seller: data.isBestSeller,
-          chef_recommended: data.chefRecommended, rating: data.rating,
-          calories: data.calories, discount: data.discount,
-          allergens: Array.isArray(data.allergens) ? data.allergens.join(',') : data.allergens,
-        })
-      } catch { await get().fetchAll() }
+      await client.put(`/menu-items/${id}`, {
+        category_id: data.categoryId, name: data.name, name_am: data.nameAm,
+        description: data.description, description_am: data.descriptionAm,
+        price: data.price, image_url: data.image, prep_time: data.prepTime,
+        is_spicy: data.isSpicy, is_vegetarian: data.isVegetarian,
+        is_available: data.isAvailable, is_featured: data.isFeatured,
+        is_popular: data.isPopular, is_best_seller: data.isBestSeller,
+        chef_recommended: data.chefRecommended, rating: data.rating,
+        calories: data.calories, discount: data.discount,
+        allergens: Array.isArray(data.allergens) ? data.allergens.join(',') : data.allergens,
+      })
     },
 
     deleteMenuItem: async (id) => {
       set(s => ({ menuItems: s.menuItems.filter(i => i.id !== id) }))
-      try { await client.delete(`/menu-items/${id}`) }
-      catch { await get().fetchAll() }
+      await client.delete(`/menu-items/${id}`)
     },
 
     toggleAvailable: async (id) => {
@@ -347,7 +335,11 @@ function makeStore(set, get) {
           calories: item.calories, discount: item.discount,
           allergens: Array.isArray(item.allergens) ? item.allergens.join(',') : item.allergens,
         })
-      } catch { await get().fetchAll() }
+      } catch (err) {
+        // Revert on failure
+        set(s => ({ menuItems: s.menuItems.map(i => i.id === id ? { ...i, isAvailable: !next } : i) }))
+        throw err
+      }
     },
 
     toggleFeatured: async (id) => {
@@ -356,61 +348,67 @@ function makeStore(set, get) {
       const next = !item.isFeatured
       set(s => ({ menuItems: s.menuItems.map(i => i.id === id ? { ...i, isFeatured: next } : i) }))
       try {
-        await client.put(`/menu-items/${id}`, { ...item, category_id: item.categoryId, is_featured: next })
-      } catch { await get().fetchAll() }
+        await client.put(`/menu-items/${id}`, {
+          category_id: item.categoryId, name: item.name, name_am: item.nameAm,
+          description: item.description, description_am: item.descriptionAm,
+          price: item.price, image_url: item.image, prep_time: item.prepTime,
+          is_spicy: item.isSpicy, is_vegetarian: item.isVegetarian,
+          is_available: item.isAvailable, is_featured: next,
+          is_popular: item.isPopular, is_best_seller: item.isBestSeller,
+          chef_recommended: item.chefRecommended, rating: item.rating,
+          calories: item.calories, discount: item.discount,
+          allergens: Array.isArray(item.allergens) ? item.allergens.join(',') : item.allergens,
+        })
+      } catch (err) {
+        set(s => ({ menuItems: s.menuItems.map(i => i.id === id ? { ...i, isFeatured: !next } : i) }))
+        throw err
+      }
     },
 
     // ── Modifier Groups ──────────────────────────────────────────────────────
     addModifierGroup: async (data) => {
-      try {
-        const res = await client.post('/modifiers/groups', {
-          name: data.name, name_am: data.nameAm,
-          required: data.required, multi_select: data.multiSelect, max_select: data.maxSelect,
-        })
-        const g = res.data
-        set(s => ({
-          modifierGroups: [...s.modifierGroups, {
-            id: String(g.id), name: g.name, nameAm: g.name_am || '',
-            required: !!g.required, multiSelect: !!g.multi_select,
-            maxSelect: g.max_select || 1, modifiers: [],
-          }]
-        }))
-      } catch { /* handled by caller */ }
+      const res = await client.post('/modifiers/groups', {
+        name: data.name, name_am: data.nameAm,
+        required: data.required, multi_select: data.multiSelect, max_select: data.maxSelect,
+      })
+      const g = res.data
+      set(s => ({
+        modifierGroups: [...s.modifierGroups, {
+          id: String(g.id), name: g.name, nameAm: g.name_am || '',
+          required: !!g.required, multiSelect: !!g.multi_select,
+          maxSelect: g.max_select || 1, modifiers: [],
+        }]
+      }))
     },
 
     updateModifierGroup: async (id, data) => {
       set(s => ({ modifierGroups: s.modifierGroups.map(g => g.id === id ? { ...g, ...data } : g) }))
-      try {
-        await client.put(`/modifiers/groups/${id}`, {
-          name: data.name, name_am: data.nameAm,
-          required: data.required, multi_select: data.multiSelect, max_select: data.maxSelect,
-        })
-      } catch { await get().fetchAll() }
+      await client.put(`/modifiers/groups/${id}`, {
+        name: data.name, name_am: data.nameAm,
+        required: data.required, multi_select: data.multiSelect, max_select: data.maxSelect,
+      })
     },
 
     deleteModifierGroup: async (id) => {
       set(s => ({ modifierGroups: s.modifierGroups.filter(g => g.id !== id) }))
-      try { await client.delete(`/modifiers/groups/${id}`) }
-      catch { await get().fetchAll() }
+      await client.delete(`/modifiers/groups/${id}`)
     },
 
     addModifier: async (groupId, data) => {
-      try {
-        const res = await client.post(`/modifiers/groups/${groupId}/items`, {
-          name: data.name, name_am: data.nameAm, price: data.price,
-        })
-        const m = res.data
-        set(s => ({
-          modifierGroups: s.modifierGroups.map(g =>
-            g.id === groupId
-              ? { ...g, modifiers: [...(g.modifiers || []), {
-                  id: String(m.id), name: m.name, nameAm: m.name_am || '',
-                  price: Number(m.price) || 0, isAvailable: true,
-                }]}
-              : g
-          )
-        }))
-      } catch { /* handled by caller */ }
+      const res = await client.post(`/modifiers/groups/${groupId}/items`, {
+        name: data.name, name_am: data.nameAm, price: data.price,
+      })
+      const m = res.data
+      set(s => ({
+        modifierGroups: s.modifierGroups.map(g =>
+          g.id === groupId
+            ? { ...g, modifiers: [...(g.modifiers || []), {
+                id: String(m.id), name: m.name, nameAm: m.name_am || '',
+                price: Number(m.price) || 0, isAvailable: true,
+              }]}
+            : g
+        )
+      }))
     },
 
     updateModifier: async (groupId, modId, data) => {
@@ -421,11 +419,9 @@ function makeStore(set, get) {
             : g
         )
       }))
-      try {
-        await client.put(`/modifiers/items/${modId}`, {
-          name: data.name, name_am: data.nameAm, price: data.price,
-        })
-      } catch { await get().fetchAll() }
+      await client.put(`/modifiers/items/${modId}`, {
+        name: data.name, name_am: data.nameAm, price: data.price,
+      })
     },
 
     deleteModifier: async (groupId, modId) => {
@@ -436,34 +432,35 @@ function makeStore(set, get) {
             : g
         )
       }))
-      try { await client.delete(`/modifiers/items/${modId}`) }
-      catch { await get().fetchAll() }
+      await client.delete(`/modifiers/items/${modId}`)
     },
 
     // ── Tables ───────────────────────────────────────────────────────────────
     addTable: async (data) => {
-      try {
-        const res = await client.post('/tables', { number: data.number, capacity: data.capacity })
-        const t = res.data
-        set(s => ({
-          tables: [...s.tables, {
-            id: String(t.id), number: t.number,
-            capacity: t.capacity || 4, status: t.status || 'available',
-          }]
-        }))
-      } catch { /* handled by caller */ }
+      const res = await client.post('/tables', { number: data.number, capacity: data.capacity })
+      const t = res.data
+      set(s => ({
+        tables: [...s.tables, {
+          id: String(t.id), number: t.number,
+          capacity: t.capacity || 4, status: t.status || 'available',
+        }]
+      }))
     },
 
     updateTable: async (id, data) => {
       set(s => ({ tables: s.tables.map(t => t.id === id ? { ...t, ...data } : t) }))
-      try { await client.put(`/tables/${id}`, { number: data.number, capacity: data.capacity }) }
-      catch { await get().fetchAll() }
+      try {
+        await client.put(`/tables/${id}`, { number: data.number, capacity: data.capacity, status: data.status })
+      } catch (err) {
+        // Revert on failure
+        await get().fetchAll()
+        throw err
+      }
     },
 
     deleteTable: async (id) => {
       set(s => ({ tables: s.tables.filter(t => t.id !== id) }))
-      try { await client.delete(`/tables/${id}`) }
-      catch { await get().fetchAll() }
+      await client.delete(`/tables/${id}`)
     },
   }
 }

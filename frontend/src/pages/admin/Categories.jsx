@@ -24,22 +24,30 @@ export default function Categories() {
     setShowModal(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) { toast.error('Name is required'); return }
-    if (editing) {
-      updateCategory(editing.id, form)
-      toast.success('✅ Category updated')
-    } else {
-      addCategory(form)
-      toast.success('✅ Category created')
+    try {
+      if (editing) {
+        await updateCategory(editing.id, form)
+        toast.success('✅ Category updated')
+      } else {
+        await addCategory(form)
+        toast.success('✅ Category created')
+      }
+      setShowModal(false)
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to save category')
     }
-    setShowModal(false)
   }
 
-  const handleDelete = (cat) => {
+  const handleDelete = async (cat) => {
     if (!confirm(`Delete "${cat.name}"? This cannot be undone.`)) return
-    deleteCategory(cat.id)
-    toast.success('🗑️ Deleted')
+    try {
+      await deleteCategory(cat.id)
+      toast.success('🗑️ Deleted')
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to delete category')
+    }
   }
 
   return (
@@ -82,7 +90,7 @@ export default function Categories() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{cat.nameAm || '—'}</p>
             <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
               <span className="text-xs text-gray-400">Order: {cat.sortOrder}</span>
-              <button onClick={() => toggleCategory(cat.id)} className={`toggle-btn ${cat.isActive ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+              <button onClick={async () => { try { await toggleCategory(cat.id) } catch { toast.error('Failed to toggle') } }} className={`toggle-btn ${cat.isActive ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                 <span className={`toggle-dot ${cat.isActive ? 'left-5' : 'left-0.5'}`} />
               </button>
             </div>

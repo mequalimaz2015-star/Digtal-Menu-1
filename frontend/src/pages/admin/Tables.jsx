@@ -22,23 +22,31 @@ export default function Tables() {
     setShowModal(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.number.trim()) { toast.error('Table number is required'); return }
     if (form.capacity < 1) { toast.error('Capacity must be at least 1'); return }
-    if (editing) {
-      updateTable(editing.id, form)
-      toast.success('✅ Table updated')
-    } else {
-      addTable(form)
-      toast.success('✅ Table created')
+    try {
+      if (editing) {
+        await updateTable(editing.id, form)
+        toast.success('✅ Table updated')
+      } else {
+        await addTable(form)
+        toast.success('✅ Table created')
+      }
+      setShowModal(false)
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to save table')
     }
-    setShowModal(false)
   }
 
-  const handleDelete = (table) => {
+  const handleDelete = async (table) => {
     if (!confirm(`Delete Table ${table.number}?`)) return
-    deleteTable(table.id)
-    toast.success('🗑️ Deleted')
+    try {
+      await deleteTable(table.id)
+      toast.success('🗑️ Deleted')
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to delete table')
+    }
   }
 
   const statusColors = {
@@ -89,7 +97,14 @@ export default function Tables() {
             <div className="mb-3">
               <select
                 value={table.status}
-                onChange={(e) => { updateTable(table.id, { status: e.target.value }); toast.success('Status updated') }}
+                onChange={async (e) => {
+                  try {
+                    await updateTable(table.id, { ...table, status: e.target.value })
+                    toast.success('Status updated')
+                  } catch (err) {
+                    toast.error(err?.response?.data?.error || 'Failed to update status')
+                  }
+                }}
                 className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-400"
               >
                 <option value="available">🟢 Available</option>
