@@ -1,7 +1,27 @@
-**/node_modules
 **/.git
-**/dist
-frontend/.env*
-backend/.env*
-*.log
-*.txt
+**/.gitignore
+**/node_modules
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Frontend build artifacts (rebuilt inside Docker)
+frontend/dist
+frontend/.vite
+
+# Backend runtime files (not needed in image)
+backend/data.json
+backend/.env
+backend/.env.*
+
+# Docs / OS artifacts
+**/*.md
+README.md
+.DS_Store
+Thumbs.db
+**/.vscode
+
+# Test / coverage
+**/coverage
+**/*.test.js
+**/*.spec.js
