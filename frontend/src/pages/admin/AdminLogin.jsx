@@ -40,9 +40,7 @@ export default function AdminLogin() {
   const onSubmit = async (data) => {
     setLoading(true)
     try {
-      const apiBase = `${window.location.protocol}//${window.location.hostname}:8000/api`
-
-      const res = await fetch(`${apiBase}/auth/login`, {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: data.email, password: data.password }),

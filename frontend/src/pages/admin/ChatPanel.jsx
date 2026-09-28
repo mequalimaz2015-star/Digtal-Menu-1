@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { io } from 'socket.io-client'
 import { FiSend, FiRefreshCw, FiTrash2, FiMessageSquare, FiUser } from 'react-icons/fi'
 
-const getApiBase = () => `${window.location.protocol}//${window.location.hostname}:8000/api`
+const getApiBase = () => '/api'
 const getToken  = () => localStorage.getItem('token')
 
 function timeAgo(iso) {

@@ -41,7 +41,7 @@ function timeAgo(iso) {
   return `${Math.floor(secs / 3600)}h ago`
 }
 
-const API = `${window.location.protocol}//${window.location.hostname}:8000/api`
+const API = '/api'
 
 // ── Login screen ─────────────────────────────────────────────────────────────
 function WaiterLogin({ onLogin }) {

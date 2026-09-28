@@ -5,7 +5,7 @@ import useCartStore from '../../store/useCartStore'
 import { useOrderStore } from '../../store/useOrderStore'
 import { useTranslation } from 'react-i18next'
 
-const API = () => `${window.location.protocol}//${window.location.hostname}:8000/api`
+const API = () => '/api'
 
 // Generate stable session ID per browser tab
 function getSessionId() {

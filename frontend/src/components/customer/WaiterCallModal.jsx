@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiX, FiBell, FiCheck } from 'react-icons/fi'
 
-// Works on both localhost and phone (http://192.168.x.x:3000)
-const getApiBase = () =>
-  `${window.location.protocol}//${window.location.hostname}:8000/api`
+// Works on both localhost and production (same-origin /api)
+const getApiBase = () => '/api'
 
 const PRESET_REASONS = [
   { icon: '🍽️', en: 'Ready to order',      am: 'ትዕዛዝ ለመስጠት ዝግጁ ነኝ' },
