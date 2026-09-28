@@ -5,11 +5,9 @@
 FROM node:22-slim AS frontend-builder
 WORKDIR /app/frontend
 
-# Install deps first (cached layer)
 COPY frontend/package*.json ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
+RUN npm install --legacy-peer-deps --no-audit --no-fund
 
-# Copy source and build
 COPY frontend/ ./
 RUN npm run build
 
@@ -17,27 +15,25 @@ RUN npm run build
 FROM node:22-slim AS runner
 WORKDIR /app
 
+# Install wget for health check (not in slim by default)
+RUN apt-get update -qq && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+
 # Install backend production dependencies only
 COPY backend/package*.json ./
-RUN npm install --omit=dev --no-audit --no-fund --prefer-offline
+RUN npm install --omit=dev --no-audit --no-fund
 
-# Copy backend source files
+# Copy backend source
 COPY backend/ ./
 
-# Copy the built frontend so Express can serve it as static files
+# Copy built frontend for Express static serving
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Production environment settings
 ENV NODE_ENV=production
 ENV PORT=3000
-# Disable Node.js file watching features that exhaust inotify watchers
-ENV NODE_OPTIONS="--max-old-space-size=512"
-ENV CHOKIDAR_USEPOLLING=false
-ENV CHOKIDAR_INTERVAL=0
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1))"
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=5 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
-CMD ["node", "--no-warnings", "server.js"]
+CMD ["node", "server.js"]

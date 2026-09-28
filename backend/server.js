@@ -4,6 +4,14 @@ const path = require('path')
 const fs = require('fs')
 require('dotenv').config({ path: require('path').join(__dirname, '.env') })
 
+// Prevent uncaught errors from crashing the container
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught exception (keeping server alive):', err.message)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled rejection (keeping server alive):', reason?.message || reason)
+})
+
 // Initialize Database connection & auto-migration
 require('./db')
 
