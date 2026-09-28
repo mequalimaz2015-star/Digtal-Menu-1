@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { FiPrinter } from 'react-icons/fi'
+import { io } from 'socket.io-client'
 import PickupTicket from '../../components/customer/PickupTicket'
 import client from '../../api/client'
 import toast from 'react-hot-toast'
@@ -12,18 +13,43 @@ export default function OrderConfirmation() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [orderData, setOrderData] = useState(null)
+  const [prevStatus, setPrevStatus] = useState(null)
   const [showTicket, setShowTicket] = useState(false)
 
+  const fetchOrderStatus = async () => {
+    try {
+      const res = await client.get(`/orders/${orderId}`)
+      if (res.data) {
+        setOrderData(prev => {
+          // Detect status change for sound/notification
+          if (prev && prev.status !== res.data.status) {
+            setPrevStatus(prev.status)
+          }
+          return res.data
+        })
+      }
+    } catch (_) {}
+  }
+
   useEffect(() => {
-    const fetchOrderStatus = async () => {
-      try {
-        const res = await client.get(`/orders/${orderId}`)
-        if (res.data) setOrderData(res.data)
-      } catch (_) {}
-    }
     fetchOrderStatus()
     const interval = setInterval(fetchOrderStatus, 4000)
-    return () => clearInterval(interval)
+
+    // Socket.io: get instant update when admin changes status
+    const socket = io('/', { transports: ['websocket', 'polling'] })
+    socket.on('order_status_updated', (updated) => {
+      if (!updated) return
+      const ref = updated.order_ref || String(updated.id)
+      // Match by order_ref or numeric id
+      if (ref === orderId || String(updated.id) === orderId || updated.order_ref === orderId) {
+        fetchOrderStatus()
+      }
+    })
+
+    return () => {
+      clearInterval(interval)
+      socket.disconnect()
+    }
   }, [orderId])
 
   const status        = orderData?.status || 'new'

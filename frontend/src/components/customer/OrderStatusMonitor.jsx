@@ -209,48 +209,74 @@ export default function OrderStatusMonitor() {
 
     socket.on('order_status_updated', (updatedOrder) => {
       if (!updatedOrder) return
-      // Always refresh the full order list so admin changes propagate everywhere
-      fetchOrders()
 
-      const isMyOrder = myOrders.some(o =>
-        String(o.id) === String(updatedOrder.id) ||
-        String(o.id) === String(updatedOrder.order_ref) ||
-        o.orderRef === updatedOrder.order_ref
+      // Get all order refs this customer placed (stored in sessionStorage)
+      let customerOrderRefs = []
+      try {
+        const stored = sessionStorage.getItem('customer_order_refs')
+        customerOrderRefs = stored ? JSON.parse(stored) : []
+      } catch (_) {}
+
+      // Also check in-memory myOrders (may work if same browser session)
+      const updatedRef = updatedOrder.order_ref || String(updatedOrder.id)
+      const isMyOrder = (
+        customerOrderRefs.includes(updatedRef) ||
+        myOrders.some(o =>
+          String(o.id) === String(updatedOrder.id) ||
+          String(o.id) === updatedRef ||
+          o.orderRef === updatedRef
+        ) ||
+        // Also match by table number as fallback
+        (tableNumber && String(updatedOrder.table_number) === String(tableNumber))
       )
+
       if (isMyOrder) {
-        const prev = prevStatusesRef.current[updatedOrder.id]
-        if (prev && prev !== updatedOrder.status) {
-          handleStatusChange(updatedOrder.id, updatedOrder.status, updatedOrder)
+        const prev = prevStatusesRef.current[updatedRef]
+        if (prev !== updatedOrder.status) {
+          handleStatusChange(updatedRef, updatedOrder.status, updatedOrder)
         }
-        prevStatusesRef.current[updatedOrder.id] = updatedOrder.status
+        prevStatusesRef.current[updatedRef] = updatedOrder.status
       }
     })
 
-    // Also listen for new_order confirms (tenant-scoped)
-    socket.on('new_order', () => { fetchOrders() })
+    socket.on('new_order', () => { /* no-op for customers */ })
 
-    // 2. Fast background polling fallback (every 4 seconds)
+    // 2. Background polling — poll the customer's own orders directly
     const pollInterval = setInterval(async () => {
-      const active = myOrders.filter(o => !['served', 'cancelled'].includes(o.status))
-      for (const order of active) {
+      // Get order refs from sessionStorage
+      let customerOrderRefs = []
+      try {
+        const stored = sessionStorage.getItem('customer_order_refs')
+        customerOrderRefs = stored ? JSON.parse(stored) : []
+      } catch (_) {}
+
+      // Also include in-memory active orders
+      const activeFromStore = myOrders.filter(o => !['served', 'cancelled'].includes(o.status))
+      const allRefs = Array.from(new Set([
+        ...customerOrderRefs,
+        ...activeFromStore.map(o => o.id)
+      ]))
+
+      for (const orderRef of allRefs) {
+        // Skip already-completed orders
+        const prevStatus = prevStatusesRef.current[orderRef]
+        if (['served', 'cancelled'].includes(prevStatus)) continue
+
         try {
-          // Use axios client so X-Tenant-Slug header is always sent
-          const res = await client.get(`/orders/${order.id}`)
+          const res = await client.get(`/orders/${orderRef}`)
           const updated = res.data
           if (!updated) continue
           const newStatus = updated.status
-          const prevStatus = prevStatusesRef.current[order.id]
-
+          
           if (prevStatus && prevStatus !== newStatus) {
-            handleStatusChange(order.id, newStatus, updated)
-            fetchOrders() // refresh store after status change detected
+            handleStatusChange(orderRef, newStatus, updated)
           }
-          prevStatusesRef.current[order.id] = newStatus
+          prevStatusesRef.current[orderRef] = newStatus
         } catch (_) {}
       }
     }, 4000)
 
-    // Seed initial status cache
+    // Seed initial status cache from in-memory orders
     myOrders.forEach(o => {
       if (!prevStatusesRef.current[o.id]) {
         prevStatusesRef.current[o.id] = o.status
@@ -261,7 +287,7 @@ export default function OrderStatusMonitor() {
       socket.disconnect()
       clearInterval(pollInterval)
     }
-  }, [myOrders])
+  }, [myOrders, tableNumber])
 
   return (
     <>

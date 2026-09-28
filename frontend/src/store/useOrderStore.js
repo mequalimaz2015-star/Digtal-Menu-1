@@ -50,6 +50,18 @@ export const useOrderStore = create(
 
           set(s => ({ orders: [localOrder, ...s.orders].slice(0, 100) }))
 
+          // Store order ref in sessionStorage so OrderStatusMonitor can track it
+          // even when the customer has no auth token (cross-device polling)
+          try {
+            const existing = JSON.parse(sessionStorage.getItem('customer_order_refs') || '[]')
+            const updated = [localOrder.id, ...existing].slice(0, 20)
+            sessionStorage.setItem('customer_order_refs', JSON.stringify(updated))
+            // Also seed the status as 'new' for the monitor
+            const statuses = JSON.parse(sessionStorage.getItem('customer_order_statuses') || '{}')
+            statuses[localOrder.id] = 'new'
+            sessionStorage.setItem('customer_order_statuses', JSON.stringify(statuses))
+          } catch (_) {}
+
           localStorage.setItem('new-order-event', JSON.stringify({ order: localOrder, ts: Date.now() }))
           playBeep()
           return localOrder
