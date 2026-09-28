@@ -4,6 +4,7 @@ import { io } from 'socket.io-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useOrderStore } from '../../store/useOrderStore'
 import useCartStore from '../../store/useCartStore'
+import client from '../../api/client'
 import toast from 'react-hot-toast'
 import { FiBell, FiCheckCircle, FiVolume2, FiX } from 'react-icons/fi'
 
@@ -208,9 +209,14 @@ export default function OrderStatusMonitor() {
 
     socket.on('order_status_updated', (updatedOrder) => {
       if (!updatedOrder) return
-      fetchOrders() // Refresh store
+      // Always refresh the full order list so admin changes propagate everywhere
+      fetchOrders()
 
-      const isMyOrder = myOrders.some(o => String(o.id) === String(updatedOrder.id) || o.orderRef === updatedOrder.order_ref)
+      const isMyOrder = myOrders.some(o =>
+        String(o.id) === String(updatedOrder.id) ||
+        String(o.id) === String(updatedOrder.order_ref) ||
+        o.orderRef === updatedOrder.order_ref
+      )
       if (isMyOrder) {
         const prev = prevStatusesRef.current[updatedOrder.id]
         if (prev && prev !== updatedOrder.status) {
@@ -219,24 +225,30 @@ export default function OrderStatusMonitor() {
         prevStatusesRef.current[updatedOrder.id] = updatedOrder.status
       }
     })
-    // 2. Fast background polling fallback (every 3 seconds)
+
+    // Also listen for new_order confirms (tenant-scoped)
+    socket.on('new_order', () => { fetchOrders() })
+
+    // 2. Fast background polling fallback (every 4 seconds)
     const pollInterval = setInterval(async () => {
       const active = myOrders.filter(o => !['served', 'cancelled'].includes(o.status))
       for (const order of active) {
         try {
-          const res = await fetch(`/api/orders/${order.id}`)
-          if (!res.ok) continue
-          const updated = await res.json()
+          // Use axios client so X-Tenant-Slug header is always sent
+          const res = await client.get(`/orders/${order.id}`)
+          const updated = res.data
+          if (!updated) continue
           const newStatus = updated.status
           const prevStatus = prevStatusesRef.current[order.id]
 
           if (prevStatus && prevStatus !== newStatus) {
             handleStatusChange(order.id, newStatus, updated)
+            fetchOrders() // refresh store after status change detected
           }
           prevStatusesRef.current[order.id] = newStatus
-        } catch (_) { }
+        } catch (_) {}
       }
-    }, 3000)
+    }, 4000)
 
     // Seed initial status cache
     myOrders.forEach(o => {

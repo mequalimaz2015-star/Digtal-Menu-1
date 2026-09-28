@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiX, FiSend } from 'react-icons/fi'
+import client from '../../api/client'
 import toast from 'react-hot-toast'
 
 const CATEGORIES = [
@@ -61,24 +62,19 @@ export default function RateExperienceModal({ open, onClose, orderRef, tableNumb
     if (!overall) { toast.error('Please select an overall rating'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderRef,
-          tableNumber,
-          customerName,
-          phone,
-          overallRating:  overall,
-          foodRating:     food    || null,
-          serviceRating:  service || null,
-          comment:        comment.trim(),
-        }),
+      await client.post('/reviews', {
+        orderRef,
+        tableNumber,
+        customerName,
+        phone,
+        overallRating:  overall,
+        foodRating:     food    || null,
+        serviceRating:  service || null,
+        comment:        comment.trim(),
       })
-      if (!res.ok) throw new Error('Failed to submit')
       setStep(3)
-    } catch {
-      toast.error('Could not submit review. Please try again.')
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Could not submit review. Please try again.')
     } finally {
       setLoading(false)
     }

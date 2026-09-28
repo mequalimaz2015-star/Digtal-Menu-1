@@ -94,6 +94,7 @@ router.post('/', async (req, res) => {
           resolvedType === 'delivery' ? 'pending' : 'pending',
         ])
         const order = orderResult.rows[0]
+        const orderId = Number(order.id)  // cast BigInt → Number for MySQL
 
         for (const item of items) {
           await query(`
@@ -101,7 +102,7 @@ router.post('/', async (req, res) => {
               (order_id, menu_item_name, price, quantity, modifiers, special_instructions, item_total)
             VALUES ($1,$2,$3,$4,$5,$6,$7)
           `, [
-            order.id,
+            orderId,
             item.name || '',
             parseFloat(item.price) || 0,
             parseInt(item.qty) || 1,
@@ -114,7 +115,7 @@ router.post('/', async (req, res) => {
         // Fetch items back for the response
         let orderItems = []
         try {
-          const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [order.id])
+          const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [orderId])
           orderItems = ir.rows
         } catch (_) {}
 
@@ -182,13 +183,14 @@ router.get('/', requireAuth, requireTenantMatch, async (req, res) => {
         const ordersResult = await query(sql, params)
         const orders = ordersResult.rows || []
 
-        // Fetch items per order — individual queries avoid IN($1,$2) array issues on MySQL
+        // Fetch items per order — cast id to Number to avoid BigInt issues on MySQL
         for (const o of orders) {
+          const orderId = Number(o.id)
           try {
-            const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [o.id])
+            const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [orderId])
             o.items = ir.rows || []
           } catch (itemErr) {
-            console.warn(`Could not fetch items for order ${o.id}:`, itemErr.message)
+            console.warn(`Could not fetch items for order ${orderId}:`, itemErr.message)
             o.items = []
           }
         }
@@ -226,8 +228,9 @@ router.get('/:id', async (req, res) => {
         )
         if (ordResult.rows[0]) {
           const order = ordResult.rows[0]
+          const orderId = Number(order.id)  // cast BigInt → Number for MySQL
           try {
-            const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [order.id])
+            const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [orderId])
             order.items = ir.rows || []
           } catch (_) { order.items = [] }
           return res.json(order)

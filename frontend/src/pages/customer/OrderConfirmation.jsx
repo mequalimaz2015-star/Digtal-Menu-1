@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { FiPrinter } from 'react-icons/fi'
 import PickupTicket from '../../components/customer/PickupTicket'
+import client from '../../api/client'
 import toast from 'react-hot-toast'
 
 export default function OrderConfirmation() {
@@ -16,8 +17,8 @@ export default function OrderConfirmation() {
   useEffect(() => {
     const fetchOrderStatus = async () => {
       try {
-        const res = await fetch(`/api/orders/${orderId}`)
-        if (res.ok) setOrderData(await res.json())
+        const res = await client.get(`/orders/${orderId}`)
+        if (res.data) setOrderData(res.data)
       } catch (_) {}
     }
     fetchOrderStatus()
