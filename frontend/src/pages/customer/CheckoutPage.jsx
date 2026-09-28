@@ -7,6 +7,7 @@ import { FiArrowLeft, FiUser, FiPhone, FiMessageSquare, FiChevronDown, FiClock }
 import useCartStore from '../../store/useCartStore'
 import { useOrderStore } from '../../store/useOrderStore'
 import { useMenuStore } from '../../store/useMenuStore'
+import client from '../../api/client'
 import { restaurantInfo } from '../../data/mockData'
 import toast from 'react-hot-toast'
 import LocationPicker from '../../components/customer/LocationPicker'
@@ -53,9 +54,11 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!isTakeaway && showTablePicker) {
-      fetch('/api/tables')
-        .then(res => res.json())
-        .then(data => setTables(Array.isArray(data) && data.length > 0 ? data : fallbackTables))
+      client.get('/tables')
+        .then(res => {
+          const data = res.data
+          setTables(Array.isArray(data) && data.length > 0 ? data : fallbackTables)
+        })
         .catch(() => setTables(fallbackTables))
     }
   }, [showTablePicker, isTakeaway, fallbackTables])

@@ -49,18 +49,49 @@ async function resolveTenant(req, res, next) {
     }
   }
 
-  // Step 6 — still nothing: for unauthenticated public routes (customer menu)
-  // that don't send a header, return 400. For authenticated routes the JWT
-  // decode above should always yield something.
+  // Step 6 — still nothing: for unauthenticated public customer routes
+  // (no header, no JWT), fall back to the first/only active tenant.
+  // This makes single-restaurant deployments work without any slug.
   if (!slug && !tenantId) {
-    // Try demo token fallback (local dev only)
+    // Demo token fallback (local dev only)
     const authHeader = req.headers.authorization || ''
     if (authHeader.includes('demo-admin-token')) {
       req.tenant   = { id: 1, name: 'ABC Restaurant', slug: 'abc-restaurant', max_menu_items: 9999, max_tables: 50, max_staff_accounts: 20, delivery_enabled: true }
       req.tenantId = 1
       return next()
     }
-    return res.status(400).json({ error: 'Tenant context required. Provide X-Tenant-Slug header or authenticate.' })
+
+    // Public customer routes — try to resolve from the first active tenant in DB
+    try {
+      const tenantRes = await query(`
+        SELECT t.*, p.name as plan_name, p.max_menu_items, p.max_tables,
+               p.max_orders_per_month, p.max_staff_accounts, p.delivery_enabled,
+               p.white_label_enabled, p.analytics_enabled
+        FROM tenants t
+        LEFT JOIN subscription_plans p ON t.subscription_plan_id = p.id
+        WHERE t.status = 'active'
+        ORDER BY t.id ASC
+        LIMIT 1
+      `)
+      if (tenantRes && tenantRes.rows && tenantRes.rows.length > 0) {
+        req.tenant   = tenantRes.rows[0]
+        req.tenantId = Number(tenantRes.rows[0].id)
+        return next()
+      }
+    } catch (_) {}
+
+    // localStore fallback
+    const firstTenant = local.getTenants()[0]
+    if (firstTenant) {
+      req.tenant   = { ...firstTenant, max_menu_items: 9999, max_tables: 50, max_staff_accounts: 20, delivery_enabled: true }
+      req.tenantId = req.tenant.id
+      return next()
+    }
+
+    // Absolute last resort — abc-restaurant defaults
+    req.tenant   = buildFallbackTenant(1, 'abc-restaurant')
+    req.tenantId = 1
+    return next()
   }
 
   // ── Try database ─────────────────────────────────────────────────────────

@@ -46,12 +46,22 @@ export default function HomePage() {
 
   useEffect(() => {
     if (tenantSlug) {
+      // Store in sessionStorage so customer API calls (POST order, GET tables)
+      // all send the correct X-Tenant-Slug header — even with no login
+      sessionStorage.setItem('tenant_slug', tenantSlug)
       localStorage.setItem('tenant_slug', tenantSlug)
       fetchRestaurant(tenantSlug)
       fetchCustomerMenu(tenantSlug)
     } else {
-      fetchRestaurant('abc-restaurant')
-      fetchCustomerMenu('abc-restaurant')
+      // No slug in URL — use default tenant (abc-restaurant / Five Stop)
+      // Store it so checkout API calls still work
+      const defaultSlug = 'abc-restaurant'
+      sessionStorage.setItem('tenant_slug', defaultSlug)
+      if (!localStorage.getItem('tenant_slug')) {
+        localStorage.setItem('tenant_slug', defaultSlug)
+      }
+      fetchRestaurant(localStorage.getItem('tenant_slug') || defaultSlug)
+      fetchCustomerMenu(localStorage.getItem('tenant_slug') || defaultSlug)
     }
   }, [tenantSlug, fetchRestaurant, fetchCustomerMenu])
 

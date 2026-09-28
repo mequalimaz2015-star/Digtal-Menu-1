@@ -22,15 +22,16 @@ client.interceptors.request.use((config) => {
   if (isSuperAdminRequest) return config
 
   // Resolve tenant slug from (in priority order):
-  // 1. URL path  /r/:tenantSlug   (customer-facing routes)
-  // 2. localStorage 'tenant_slug' (set at admin login)
-  // 3. Decoded from the JWT itself (AletCloud: ensures slug is always available
-  //    even when localStorage was cleared or not set during login)
+  // 1. URL path  /r/:tenantSlug   (customer-facing multi-tenant routes)
+  // 2. sessionStorage 'tenant_slug' (set by customer menu pages)
+  // 3. localStorage  'tenant_slug'  (set at admin login)
+  // 4. Decoded from the JWT itself  (AletCloud: ensures slug always available)
   const pathMatch = window.location.pathname.match(/^\/r\/([^/]+)/)
   const pathSlug = pathMatch ? pathMatch[1] : null
-  const storedSlug = localStorage.getItem('tenant_slug')
+  const sessionSlug = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('tenant_slug') : null
+  const storedSlug  = localStorage.getItem('tenant_slug')
 
-  let tenantSlug = pathSlug || storedSlug
+  let tenantSlug = pathSlug || sessionSlug || storedSlug
 
   if (!tenantSlug && token && token !== 'demo-admin-token') {
     try {
@@ -40,7 +41,6 @@ client.interceptors.request.use((config) => {
         const payload = JSON.parse(atob(padded + '=='.slice((padded.length % 4) || 4)))
         if (payload.tenant_slug) {
           tenantSlug = payload.tenant_slug
-          // Cache it so future requests don't need to decode again
           localStorage.setItem('tenant_slug', tenantSlug)
         }
       }
