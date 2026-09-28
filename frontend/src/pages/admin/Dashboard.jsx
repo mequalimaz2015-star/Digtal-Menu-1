@@ -6,6 +6,7 @@ import {
   FiRefreshCw, FiCheckCircle, FiAlertCircle, FiTrendingUp,
 } from 'react-icons/fi'
 import { MdTableRestaurant } from 'react-icons/md'
+import { io } from 'socket.io-client'
 import { useRole } from '../../hooks/useRole'
 import client from '../../api/client'
 
@@ -69,7 +70,6 @@ export default function Dashboard() {
     const iv = setInterval(fetchOrders, 5000)
 
     // Real-time socket for instant cross-device updates
-    const { io } = require('socket.io-client')
     const socket = io('/', { transports: ['websocket', 'polling'] })
     socket.on('new_order', fetchOrders)
     socket.on('order_status_updated', fetchOrders)

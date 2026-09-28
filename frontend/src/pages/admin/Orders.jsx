@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiSearch, FiEye, FiX, FiRefreshCw, FiTrash2, FiPrinter } from 'react-icons/fi'
+import { io } from 'socket.io-client'
 import { useOrderStore } from '../../store/useOrderStore'
 import toast from 'react-hot-toast'
 import client from '../../api/client'
@@ -120,7 +121,6 @@ export default function Orders() {
 
   // Real-time: Socket.io for cross-device updates + localStorage for same-device
   useEffect(() => {
-    const { io } = require('socket.io-client')
     const socket = io('/', { transports: ['websocket', 'polling'] })
     socket.on('new_order', () => fetchOrders(true))
     socket.on('order_status_updated', () => fetchOrders(true))

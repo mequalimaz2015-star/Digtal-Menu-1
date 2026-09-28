@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiClock, FiCheck, FiRefreshCw } from 'react-icons/fi'
+import { io } from 'socket.io-client'
 import toast from 'react-hot-toast'
 import client from '../../api/client'
 const statusFlow = { new: 'preparing', preparing: 'ready', ready: 'served' }
@@ -83,7 +84,6 @@ export default function KitchenDisplay() {
     return () => clearInterval(intervalRef.current)
   }, [fetchOrders])
   useEffect(() => {
-    const { io } = require('socket.io-client')
     const socket = io('/', { transports: ['websocket', 'polling'] })
     socket.on('new_order', () => fetchOrders(true))
     socket.on('order_status_updated', () => fetchOrders(true))
