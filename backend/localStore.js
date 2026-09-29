@@ -400,6 +400,7 @@ function createTenant({ name, slug, email, phone, address, plan_id, admin_passwo
     id: maxUserId + 1,
     name: `${name} Admin`,
     email: email.trim(),
+    password: admin_password || '',   // store the (already hashed) password
     role: 'admin',
     tenant_id: tenant.id,
     is_active: true

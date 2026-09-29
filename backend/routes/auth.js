@@ -76,7 +76,7 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user) {
-      // Check localStore users — look up the real tenant slug, not a hardcoded fallback
+      // Check localStore users — look up the real tenant slug
       const localUser = local.getUserByEmail(cleanEmail)
       if (localUser) {
         const localTenant = localUser.tenant_id
@@ -84,7 +84,8 @@ router.post('/login', async (req, res) => {
           : null
         user = {
           ...localUser,
-          password: '$2a$10$0JrruzcU5e6jBnxxTWXL2.2pE6TJNGE6DGdkMyVFbAnMOUJhVkBLu',
+          // Keep localUser.password (the bcrypt hash stored at registration)
+          // Do NOT overwrite it with a hardcoded hash
           tenant_slug: localTenant ? localTenant.slug : null,
           tenant_name: localTenant ? localTenant.name : 'Restaurant'
         }
@@ -171,13 +172,19 @@ router.post('/send-otp', async (req, res) => {
 
     const cleanEmail = email.toLowerCase().trim()
 
-    // Check email not already registered
+    // Check email not already registered — check both DB and localStore
     try {
       const existing = await query('SELECT id FROM users WHERE LOWER(email)=$1', [cleanEmail])
       if (existing.rows.length > 0) {
         return res.status(400).json({ error: 'This email is already registered. Please sign in instead.' })
       }
-    } catch (_) {}
+    } catch (_) {
+      // DB unavailable — check localStore
+      const localUser = local.getUserByEmail(cleanEmail)
+      if (localUser) {
+        return res.status(400).json({ error: 'This email is already registered. Please sign in instead.' })
+      }
+    }
 
     const otp = generateOTP()
     const expiresAt = Date.now() + 10 * 60 * 1000 // 10 minutes

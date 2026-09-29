@@ -111,12 +111,13 @@ router.post('/register', async (req, res) => {
     }
 
     // Fallback registration to localStore when DB is offline
+    const hashedPassword = await bcrypt.hash(password, 10)
     const { tenant, user } = local.createTenant({
       name: restaurant_name,
       slug: cleanSlug,
       email,
       phone,
-      admin_password: password
+      admin_password: hashedPassword   // store the hash, not raw password
     })
 
     const token = jwt.sign(
