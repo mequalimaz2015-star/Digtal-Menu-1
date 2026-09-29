@@ -62,7 +62,7 @@ export default function TenantRegistration() {
   const [otpError, setOtpError]     = useState('')
   const [otpLoading, setOtpLoading] = useState(false)
   const [resendTimer, setResendTimer] = useState(0)
-  const [devCode, setDevCode]       = useState(null) // shown only in dev without SMTP
+  const [devCode, setDevCode]       = useState(null) // shown when SMTP not configured
   const otpRefs = useRef([])
 
   // Step 3 success
@@ -103,7 +103,11 @@ export default function TenantRegistration() {
         email: form.email,
         restaurantName: form.restaurant_name,
       })
-      if (res.data.devCode) setDevCode(res.data.devCode)
+      if (res.data.devCode) {
+        setDevCode(res.data.devCode)
+        // Auto-fill the OTP boxes so user doesn't have to type it manually
+        setOtp(res.data.devCode.split(''))
+      }
       setStep(2)
       setResendTimer(60)
     } catch (err) {
@@ -174,7 +178,10 @@ export default function TenantRegistration() {
     setOtp(['', '', '', '', '', ''])
     try {
       const res = await client.post('/auth/send-otp', { email: form.email, restaurantName: form.restaurant_name })
-      if (res.data.devCode) setDevCode(res.data.devCode)
+      if (res.data.devCode) {
+        setDevCode(res.data.devCode)
+        setOtp(res.data.devCode.split(''))
+      }
       setResendTimer(60)
     } catch (err) {
       setOtpError(err.response?.data?.error || 'Failed to resend code')
@@ -336,14 +343,24 @@ export default function TenantRegistration() {
                     </p>
                   </div>
 
-                  {/* Dev mode: show OTP in UI when no SMTP configured */}
+                  {/* Fallback: show OTP in UI when SMTP is not configured on server */}
                   {devCode && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                      className="mb-5 p-3.5 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex items-center gap-3">
-                      <span className="text-xl">🛠️</span>
-                      <div>
-                        <p className="text-indigo-300 text-xs font-bold">Dev mode — no SMTP configured</p>
-                        <p className="text-white text-sm font-mono font-black tracking-widest">{devCode}</p>
+                      className="mb-5 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl flex-shrink-0">⚠️</span>
+                        <div className="flex-1">
+                          <p className="text-amber-400 text-xs font-bold uppercase tracking-wide mb-1">Email delivery unavailable</p>
+                          <p className="text-slate-300 text-xs leading-relaxed mb-3">
+                            The email server is not configured yet so the code couldn't be sent to your inbox.
+                            Use the code below to continue — it works exactly the same.
+                          </p>
+                          <div className="bg-slate-950 border border-amber-500/50 rounded-lg px-4 py-3 text-center">
+                            <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Your verification code</p>
+                            <p className="text-amber-400 text-2xl font-black font-mono tracking-[0.3em]">{devCode}</p>
+                            <p className="text-slate-500 text-[10px] mt-1">Already filled in for you ↓</p>
+                          </div>
+                        </div>
                       </div>
                     </motion.div>
                   )}

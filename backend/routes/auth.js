@@ -203,14 +203,16 @@ router.post('/send-otp', async (req, res) => {
       text:    `Your MEGA Digital Menu verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
     })
 
+    const smtpConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS)
     console.log(`📧 OTP sent to ${cleanEmail}: ${otp} (${emailResult.ok ? 'delivered' : 'email failed - check SMTP config'})`)
-    if (emailResult.preview) console.log('   Preview:', emailResult.preview)
+    if (emailResult.preview) console.log('   Preview (Ethereal):', emailResult.preview)
+    if (!smtpConfigured) console.warn('⚠️  SMTP not configured — OTP not delivered to real email. Set SMTP_USER and SMTP_PASS env vars.')
 
     res.json({
       ok: true,
       message: `Verification code sent to ${cleanEmail}`,
-      // In dev with no SMTP, return the code so it can be shown in UI
-      ...(process.env.NODE_ENV !== 'production' && !process.env.SMTP_USER && { devCode: otp }),
+      // Always return devCode when SMTP is not configured so user can still register
+      ...(!smtpConfigured && { devCode: otp, smtpMissing: true }),
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
