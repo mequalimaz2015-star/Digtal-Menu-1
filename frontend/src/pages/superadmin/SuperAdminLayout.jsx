@@ -3,7 +3,7 @@ import { useState } from 'react'
 import {
   Shield, LayoutDashboard, Building2, Layers, Users, DollarSign,
   Settings, LogOut, Menu, X, ChevronRight, Activity,
-  FileText, Bell, ExternalLink, Globe, Zap
+  FileText, Bell, ExternalLink, Globe, Zap, MessageSquare
 } from 'lucide-react'
 
 const NAV = [
@@ -30,9 +30,10 @@ const NAV = [
   {
     label: 'System',
     items: [
-      { to: '/superadmin/activity', icon: Activity, label: 'Activity Log' },
-      { to: '/superadmin/announcements', icon: Bell, label: 'Announcements' },
-      { to: '/superadmin/settings', icon: Settings, label: 'Platform Settings' },
+      { to: '/superadmin/activity',      icon: Activity,       label: 'Activity Log' },
+      { to: '/superadmin/announcements', icon: Bell,           label: 'Announcements' },
+      { to: '/superadmin/support-chat',  icon: MessageSquare,  label: 'Support Chat' },
+      { to: '/superadmin/settings',      icon: Settings,       label: 'Platform Settings' },
     ],
   },
 ]
@@ -67,8 +68,8 @@ export default function SuperAdminLayout() {
             <Shield className="w-5 h-5 text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="font-black text-white text-sm leading-tight truncate">Noble's Ecom Admin</h1>
-            <span className="text-xs text-amber-400 font-semibold">Platform Owner</span>
+            <h1 className="font-black text-white text-sm leading-tight truncate">MEGA Digital Menu</h1>
+            <span className="text-xs text-amber-400 font-semibold">Super Admin</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden text-slate-500 hover:text-slate-300">
             <X className="w-5 h-5" />

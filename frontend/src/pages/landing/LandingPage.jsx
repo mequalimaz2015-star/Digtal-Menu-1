@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { io } from 'socket.io-client'
 
 const NAV_LINKS = [
   { label: 'Home',     href: '#home' },
@@ -61,13 +62,227 @@ const TESTIMONIALS = [
   { name: 'Abebe M.',     role: 'Owner, Piazza Lounge',     text: 'The multilingual menu is perfect for our international guests. Reviews have helped us improve our menu.', stars: 5 },
 ]
 
+// ── Platform Support Chat Widget ──────────────────────────────────────────────
+const API_URL = import.meta.env.VITE_API_URL || '/api'
+
+function getVisitorSessionId() {
+  let sid = sessionStorage.getItem('visitor_support_session')
+  if (!sid) {
+    sid = `vsup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    sessionStorage.setItem('visitor_support_session', sid)
+  }
+  return sid
+}
+
+function SupportChatWidget() {
+  const [open, setOpen]           = useState(false)
+  const [messages, setMessages]   = useState([])
+  const [input, setInput]         = useState('')
+  const [sending, setSending]     = useState(false)
+  const [visitorInfo, setVisitorInfo] = useState({ name: '', email: '', submitted: false })
+  const [unread, setUnread]       = useState(0)
+  const bottomRef                 = useRef(null)
+  const socketRef                 = useRef(null)
+  const sessionId                 = getVisitorSessionId()
+
+  useEffect(() => {
+    const socket = io('/', { transports: ['websocket', 'polling'] })
+    socketRef.current = socket
+    // Listen for superadmin replies addressed to this session
+    socket.on(`platform_reply_${sessionId}`, (msg) => {
+      setMessages(prev => [...prev, msg])
+      if (!open) setUnread(n => n + 1)
+    })
+    return () => socket.disconnect()
+  }, [sessionId, open])
+
+  useEffect(() => {
+    if (open) setUnread(0)
+  }, [open])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, open])
+
+  const sendMessage = async (text, name = '', email = '') => {
+    if (!text.trim()) return
+    setSending(true)
+    const visitorMsg = { role: 'visitor', text: text.trim(), ts: new Date().toISOString(), id: `v-${Date.now()}` }
+    setMessages(prev => [...prev, visitorMsg])
+    try {
+      const res = await fetch(`${API_URL}/platform-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, message: text, visitorName: name, visitorEmail: email }),
+      })
+      const data = await res.json()
+      if (data.message) setMessages(prev => [...prev, data.message])
+    } catch (_) {}
+    setSending(false)
+  }
+
+  const handleInfoSubmit = (e) => {
+    e.preventDefault()
+    setVisitorInfo(v => ({ ...v, submitted: true }))
+    sendMessage('Hello! I just started a chat.', visitorInfo.name, visitorInfo.email)
+  }
+
+  const handleSend = (e) => {
+    e.preventDefault()
+    if (!input.trim() || sending) return
+    sendMessage(input, visitorInfo.name, visitorInfo.email)
+    setInput('')
+  }
+
+  const renderText = (text) =>
+    text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+      part.startsWith('**') && part.endsWith('**')
+        ? <strong key={i}>{part.slice(2, -2)}</strong>
+        : part
+    )
+
+  return (
+    <>
+      {/* Floating bubble */}
+      <motion.button
+        onClick={() => setOpen(o => !o)}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.95 }}
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full shadow-2xl shadow-orange-500/40 flex items-center justify-center text-slate-950 text-2xl"
+        aria-label="Open support chat"
+      >
+        {open ? '✕' : '💬'}
+        {unread > 0 && !open && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-slate-950">
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+      </motion.button>
+
+      {/* Chat panel */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            style={{ maxHeight: '520px' }}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-600 flex-shrink-0">
+              <img src="/mega-logo.png" alt="MEGA" className="w-8 h-8 rounded-full object-cover border-2 border-white/30" />
+              <div className="flex-1 min-w-0">
+                <p className="text-slate-950 font-black text-sm">MEGA Support</p>
+                <p className="text-slate-900/70 text-[10px] font-medium">Typically replies in minutes</p>
+              </div>
+              <button onClick={() => setOpen(false)} className="text-slate-950/70 hover:text-slate-950">✕</button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2 min-h-0">
+              {/* Welcome */}
+              {messages.length === 0 && !visitorInfo.submitted && (
+                <div className="text-center py-4">
+                  <div className="text-3xl mb-2">👋</div>
+                  <p className="text-white font-bold text-sm">Hi there!</p>
+                  <p className="text-slate-400 text-xs mt-1">Ask us anything about MEGA Digital Menu. We usually reply within minutes.</p>
+                </div>
+              )}
+
+              {messages.map(msg => {
+                const isAdmin = msg.role === 'admin'
+                const isBot   = msg.role === 'bot'
+                return (
+                  <div key={msg.id} className={`flex ${isAdmin || isBot ? 'justify-start' : 'justify-end'}`}>
+                    <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${
+                      isAdmin ? 'bg-amber-500 text-slate-950 font-medium'
+                      : isBot ? 'bg-slate-800 text-slate-200'
+                      : 'bg-indigo-600 text-white'
+                    }`}>
+                      {isBot && <span className="text-[10px] text-slate-400 block mb-1">🤖 MEGA Bot</span>}
+                      {isAdmin && <span className="text-[10px] text-slate-900/70 block mb-1">💼 {msg.adminName || 'MEGA Support'}</span>}
+                      {renderText(msg.text)}
+                    </div>
+                  </div>
+                )
+              })}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Name/email gate or message input */}
+            {!visitorInfo.submitted ? (
+              <form onSubmit={handleInfoSubmit} className="px-4 py-3 border-t border-slate-800 space-y-2 flex-shrink-0">
+                <p className="text-slate-400 text-xs font-semibold">Quick intro before we chat:</p>
+                <input
+                  required
+                  placeholder="Your name"
+                  value={visitorInfo.name}
+                  onChange={e => setVisitorInfo(v => ({ ...v, name: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+                <input
+                  type="email"
+                  placeholder="Email (optional)"
+                  value={visitorInfo.email}
+                  onChange={e => setVisitorInfo(v => ({ ...v, email: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+                <button type="submit" className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl transition-colors">
+                  Start Chat →
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleSend} className="flex items-center gap-2 px-3 py-3 border-t border-slate-800 flex-shrink-0">
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="Type a message…"
+                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || sending}
+                  className="w-9 h-9 flex-shrink-0 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 rounded-xl flex items-center justify-center text-slate-950 text-base transition-colors"
+                >
+                  ➤
+                </button>
+              </form>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
   const [contactSent, setContactSent] = useState(false)
+  const [contactSending, setContactSending] = useState(false)
 
-  const handleContact = (e) => {
+  // Wire contact form to the real platform-chat API so superadmin sees it
+  const handleContact = async (e) => {
     e.preventDefault()
+    setContactSending(true)
+    try {
+      const sessionId = getVisitorSessionId()
+      await fetch(`${API_URL}/platform-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          message: `[Contact Form]\nName: ${contactForm.name}\nEmail: ${contactForm.email}\n\n${contactForm.message}`,
+          visitorName: contactForm.name,
+          visitorEmail: contactForm.email,
+        }),
+      })
+    } catch (_) {}
+    setContactSending(false)
     setContactSent(true)
     setContactForm({ name: '', email: '', message: '' })
   }
@@ -429,8 +644,9 @@ export default function LandingPage() {
                       className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 text-sm resize-none" />
                   </div>
                   <button type="submit"
-                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20">
-                    Send Message →
+                    disabled={contactSending}
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-60 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20">
+                    {contactSending ? 'Sending…' : 'Send Message →'}
                   </button>
                 </form>
               )}
@@ -496,6 +712,9 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* ── Platform Support Chat Widget ── */}
+      <SupportChatWidget />
     </div>
   )
 }

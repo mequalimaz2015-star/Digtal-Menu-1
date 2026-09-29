@@ -44,6 +44,7 @@ import SAUsers from './pages/superadmin/SAUsers'
 import SAActivity from './pages/superadmin/SAActivity'
 import SAAnnouncements from './pages/superadmin/SAAnnouncements'
 import SASettings from './pages/superadmin/SASettings'
+import SupportChatPanel from './pages/superadmin/SupportChatPanel'
 import TenantRegistration from './pages/saas/TenantRegistration'
 import RiderDashboard from './pages/rider/RiderDashboard'
 import LandingPage from './pages/landing/LandingPage'
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="users"         element={<SAUsers />} />
           <Route path="activity"      element={<SAActivity />} />
           <Route path="announcements" element={<SAAnnouncements />} />
+          <Route path="support-chat"  element={<SupportChatPanel />} />
           <Route path="settings"      element={<SASettings />} />
         </Route>
 

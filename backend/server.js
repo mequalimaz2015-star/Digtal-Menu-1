@@ -34,6 +34,7 @@ app.use('/api/users',      require('./routes/users'))
 app.use('/api/waiter-calls', require('./routes/waiterCalls'))
 app.use('/api/reviews',    require('./routes/reviews'))
 app.use('/api/chat',       require('./routes/chat'))
+app.use('/api/platform-chat', require('./routes/platformChat'))
 
 app.get('/health', (req, res) => res.json({ status: 'healthy' }))
 app.get('/api/status', (req, res) => res.json({ message: 'ABC Restaurant API', status: 'running' }))
@@ -112,6 +113,13 @@ io.on('connection', (socket) => {
     const room = `customer-${tenantId}-${sessionId}`
     socket.join(room)
     console.log(`👤 Socket ${socket.id} joined customer room: ${room}`)
+  })
+
+  // ── Room join: superadmin support panel joins the platform support room ──────
+  // Client sends: socket.emit('join_superadmin_support')
+  socket.on('join_superadmin_support', () => {
+    socket.join('superadmin-support')
+    console.log(`🛡️ Socket ${socket.id} joined superadmin-support room`)
   })
 
   // ── Room leave ─────────────────────────────────────────────────────────────
