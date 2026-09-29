@@ -77,8 +77,8 @@ router.post('/register', async (req, res) => {
       const hashedPassword = await bcrypt.hash(password, 10)
 
       const userRes = await query(`
-        INSERT INTO users (name, email, password, role, tenant_id)
-        VALUES ($1, $2, $3, 'admin', $4)
+        INSERT INTO users (name, email, password, role, tenant_id, is_active)
+        VALUES ($1, $2, $3, 'admin', $4, true)
         RETURNING id, name, email, role, tenant_id
       `, [admin_name || `${restaurant_name} Admin`, email, hashedPassword, tenant.id])
 

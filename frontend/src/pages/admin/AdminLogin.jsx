@@ -48,6 +48,13 @@ export default function AdminLogin() {
 
       if (res.ok) {
         const result = await res.json()
+
+        // Clear ALL stale menu store caches from previous sessions/restaurants
+        // before setting the new slug — prevents showing another restaurant's data
+        Object.keys(localStorage)
+          .filter(k => k.startsWith('menu-store-'))
+          .forEach(k => localStorage.removeItem(k))
+
         localStorage.setItem('token', result.access_token)
         localStorage.setItem('admin-user', JSON.stringify(result.user))
 
@@ -102,7 +109,7 @@ export default function AdminLogin() {
             🍽️
           </div>
           <h1 className="text-2xl font-black text-gray-900 dark:text-white">Staff Login</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">ABC Restaurant · Staff Portal</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">MEGA Digital Menu · Staff Portal</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
