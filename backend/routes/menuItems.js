@@ -210,6 +210,106 @@ router.put('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), asyn
   }
 })
 
+// ── POST /api/menu-items/bulk ──────────────────────────────────────────────────
+// Atomically creates categories (if new) + all items from AI/Excel import preview.
+// Body: { categories: [{name, icon, color}], items: [{categoryName, name, ...}] }
+router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
+  try {
+    const { categories = [], items = [] } = req.body
+    if (!items.length) return res.status(400).json({ error: 'No items to import' })
+
+    const tid = req.tenantId
+
+    // 1. Upsert categories — create if name doesn't exist for this tenant
+    const categoryIdMap = {} // categoryName → id
+    for (const cat of categories) {
+      if (!cat.name) continue
+      try {
+        // Check if category already exists
+        const existing = await query(
+          `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
+          [tid, cat.name]
+        )
+        if (existing.rows[0]) {
+          categoryIdMap[cat.name] = existing.rows[0].id
+        } else {
+          const sortRes = await query(
+            `SELECT COALESCE(MAX(sort_order),0)+1 AS next FROM categories WHERE tenant_id=$1`, [tid]
+          )
+          const sortOrder = sortRes.rows[0]?.next || 1
+          const ins = await query(
+            `INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order, is_active)
+             VALUES ($1,$2,$3,$4,$5,$6,true) RETURNING id`,
+            [tid, cat.name, cat.nameAm || '', cat.icon || '🍽️', cat.color || '#e85d04', sortOrder]
+          )
+          categoryIdMap[cat.name] = ins.rows[0].id
+        }
+      } catch (catErr) {
+        console.warn(`Bulk import: category "${cat.name}" error:`, catErr.message)
+      }
+    }
+
+    // 2. Insert items — skip rows missing name or price
+    const created = []
+    const skipped = []
+
+    for (const item of items) {
+      if (!item.name || !item.price) { skipped.push(item.name || '(unnamed)'); continue }
+
+      const catId = categoryIdMap[item.categoryName]
+      if (!catId) { skipped.push(item.name); continue }
+
+      try {
+        const r = await query(`
+          INSERT INTO menu_items
+            (tenant_id, category_id, name, name_am, description, description_am,
+             price, image_url, prep_time, is_spicy, is_vegetarian, is_available,
+             is_featured, is_popular, is_best_seller, chef_recommended,
+             rating, calories, discount, allergens)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          RETURNING id
+        `, [
+          tid,
+          catId,
+          item.name,
+          item.nameAm        || '',
+          item.description   || '',
+          item.descriptionAm || '',
+          parseFloat(item.price)    || 0,
+          item.imageUrl      || item.image_url || '',
+          parseInt(item.prepTime || item.prep_time) || 15,
+          item.isSpicy        ? true : false,
+          item.isVegetarian   ? true : false,
+          true,  // is_available
+          item.isFeatured     ? true : false,
+          item.isBestSeller   ? true : false,
+          item.isBestSeller   ? true : false,
+          false, // chef_recommended
+          parseFloat(item.rating) || 4.5,
+          item.calories ? parseInt(item.calories) : null,
+          parseFloat(item.discount) || 0,
+          item.allergens || '',
+        ])
+        created.push({ id: r.rows[0].id, name: item.name })
+      } catch (itemErr) {
+        console.warn(`Bulk import: item "${item.name}" error:`, itemErr.message)
+        skipped.push(item.name)
+      }
+    }
+
+    return res.status(201).json({
+      created: created.length,
+      skipped: skipped.length,
+      createdItems: created,
+      skippedNames: skipped,
+      categoriesCreated: Object.keys(categoryIdMap).length,
+    })
+  } catch (err) {
+    console.error('Bulk import error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // DELETE /api/menu-items/:id
 router.delete('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {

@@ -1,10 +1,11 @@
 import { useState, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiImage, FiX, FiSave, FiDownload, FiUpload } from 'react-icons/fi'
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiImage, FiX, FiSave, FiDownload, FiUpload, FiZap } from 'react-icons/fi'
 import { BsFire, BsLeaf } from 'react-icons/bs'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import { useMenuStore } from '../../store/useMenuStore'
+import AIMenuImportModal from '../../components/admin/AIMenuImportModal'
 
 
 const emptyForm = {
@@ -20,6 +21,7 @@ export default function MenuItems() {
   const [catFilter, setCatFilter] = useState('all')
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showAIImport, setShowAIImport] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const fileInputRef = useRef(null)
@@ -183,6 +185,12 @@ export default function MenuItems() {
         </div>
         <div className="flex gap-2">
           <input type="file" ref={fileInputRef} onChange={handleImport} accept=".xlsx,.xls,.csv" className="hidden" />
+          <button
+            onClick={() => setShowAIImport(true)}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 shadow-lg shadow-amber-500/20 transition-all"
+          >
+            <FiZap size={16} /> AI Import
+          </button>
           <button onClick={() => setShowImportModal(true)} className="btn-secondary flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
             <FiUpload size={16} /> Import
           </button>
@@ -298,6 +306,15 @@ export default function MenuItems() {
           <ImportHelpModal 
             onClose={() => setShowImportModal(false)} 
             onProceed={() => fileInputRef.current?.click()} 
+          />
+        )}
+        {showAIImport && (
+          <AIMenuImportModal
+            onClose={() => setShowAIImport(false)}
+            onImported={() => {
+              // Re-fetch menu items after bulk import
+              try { useMenuStore.getState().fetchMenu() } catch (_) {}
+            }}
           />
         )}
       </AnimatePresence>
