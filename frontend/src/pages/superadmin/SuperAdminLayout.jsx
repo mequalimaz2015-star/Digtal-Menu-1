@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import {
-  Shield, LayoutDashboard, Building2, Layers, Users, DollarSign,
+  LayoutDashboard, Building2, Layers, Users, DollarSign,
   Settings, LogOut, Menu, X, ChevronRight, Activity,
   FileText, Bell, ExternalLink, Globe, Zap, MessageSquare
 } from 'lucide-react'
@@ -64,9 +64,11 @@ export default function SuperAdminLayout() {
       `}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
-            <Shield className="w-5 h-5 text-white" />
-          </div>
+          <img
+            src="/mega-logo.png"
+            alt="MEGA Digital Menu"
+            className="w-10 h-10 rounded-full object-cover shadow-lg ring-2 ring-amber-500/30 flex-shrink-0"
+          />
           <div className="min-w-0 flex-1">
             <h1 className="font-black text-white text-sm leading-tight truncate">MEGA Digital Menu</h1>
             <span className="text-xs text-amber-400 font-semibold">Super Admin</span>
