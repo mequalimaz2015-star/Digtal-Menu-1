@@ -4,6 +4,15 @@ const jwt = require('jsonwebtoken')
 const { query } = require('../db')
 const { requireAuth } = require('../middleware/auth')
 const local = require('../localStore')
+const { sendEmail, otpEmailHtml } = require('../emailService')
+
+// In-memory OTP store: email → { code, expiresAt, restaurantName }
+// (survives server restart for ~10 min window, no DB needed)
+const otpStore = new Map()
+
+function generateOTP() {
+  return String(Math.floor(100000 + Math.random() * 900000))
+}
 
 const FALLBACK_USERS = [
   {
@@ -151,6 +160,84 @@ router.get('/me', requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
+})
+
+// ── POST /api/auth/send-otp ───────────────────────────────────────────────────
+// Public — send a 6-digit OTP to an email address for registration verification
+router.post('/send-otp', async (req, res) => {
+  try {
+    const { email, restaurantName } = req.body
+    if (!email) return res.status(400).json({ error: 'Email required' })
+
+    const cleanEmail = email.toLowerCase().trim()
+
+    // Check email not already registered
+    try {
+      const existing = await query('SELECT id FROM users WHERE LOWER(email)=$1', [cleanEmail])
+      if (existing.rows.length > 0) {
+        return res.status(400).json({ error: 'This email is already registered. Please sign in instead.' })
+      }
+    } catch (_) {}
+
+    const otp = generateOTP()
+    const expiresAt = Date.now() + 10 * 60 * 1000 // 10 minutes
+
+    // Rate limiting: allow max 3 sends per email per 10 min window
+    const existing = otpStore.get(cleanEmail)
+    if (existing && existing.sendCount >= 3 && existing.expiresAt > Date.now()) {
+      return res.status(429).json({ error: 'Too many OTP requests. Please wait 10 minutes and try again.' })
+    }
+
+    otpStore.set(cleanEmail, {
+      code: otp,
+      expiresAt,
+      restaurantName: restaurantName || '',
+      sendCount: (existing?.sendCount || 0) + 1,
+    })
+
+    // Send email (async — don't block response)
+    const emailResult = await sendEmail({
+      to:      cleanEmail,
+      subject: `${otp} — Your MEGA Digital Menu verification code`,
+      html:    otpEmailHtml(otp, restaurantName),
+      text:    `Your MEGA Digital Menu verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+    })
+
+    console.log(`📧 OTP sent to ${cleanEmail}: ${otp} (${emailResult.ok ? 'delivered' : 'email failed - check SMTP config'})`)
+    if (emailResult.preview) console.log('   Preview:', emailResult.preview)
+
+    res.json({
+      ok: true,
+      message: `Verification code sent to ${cleanEmail}`,
+      // In dev with no SMTP, return the code so it can be shown in UI
+      ...(process.env.NODE_ENV !== 'production' && !process.env.SMTP_USER && { devCode: otp }),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/auth/verify-otp ─────────────────────────────────────────────────
+// Public — verify OTP. Returns { valid: true } on success, marks it used.
+router.post('/verify-otp', (req, res) => {
+  const { email, code } = req.body
+  if (!email || !code) return res.status(400).json({ error: 'Email and code required' })
+
+  const cleanEmail = email.toLowerCase().trim()
+  const record = otpStore.get(cleanEmail)
+
+  if (!record) return res.status(400).json({ error: 'No verification code found for this email. Please request a new one.' })
+  if (Date.now() > record.expiresAt) {
+    otpStore.delete(cleanEmail)
+    return res.status(400).json({ error: 'Verification code expired. Please request a new one.' })
+  }
+  if (record.code !== String(code).trim()) {
+    return res.status(400).json({ error: 'Incorrect verification code. Please try again.' })
+  }
+
+  // Mark as verified (don't delete immediately — registration call might come seconds later)
+  record.verified = true
+  res.json({ ok: true, message: 'Email verified successfully!' })
 })
 
 module.exports = router

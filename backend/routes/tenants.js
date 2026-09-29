@@ -6,6 +6,7 @@ const { query } = require('../db')
 const { requireAuth, requireRole } = require('../middleware/auth')
 const { resolveTenant, requireTenantMatch } = require('../middleware/tenant')
 const local = require('../localStore')
+const { sendEmail, welcomeEmailHtml } = require('../emailService')
 
 // GET /api/tenants/public/:slug - Get public restaurant tenant branding & details by slug
 router.get('/public/:slug', async (req, res) => {
@@ -90,12 +91,21 @@ router.post('/register', async (req, res) => {
         { expiresIn: '7d' }
       )
 
+      // Send welcome email (fire-and-forget, don't block response)
+      sendEmail({
+        to:      email,
+        subject: `🎉 Welcome to MEGA Digital Menu — ${restaurant_name} is live!`,
+        html:    welcomeEmailHtml({ restaurantName: restaurant_name, adminName: admin_name, slug: tenant.slug }),
+        text:    `Welcome to MEGA Digital Menu! Your restaurant "${restaurant_name}" is now live at /r/${tenant.slug}/menu`,
+      }).catch(() => {})
+
       return res.status(201).json({
         message: 'Restaurant tenant registered successfully!',
         token,
         user,
         tenant
       })
+
     } catch (dbErr) {
       console.warn('DB write failed in tenant register, using localStore fallback:', dbErr.message)
     }

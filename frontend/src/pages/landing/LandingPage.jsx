@@ -697,8 +697,6 @@ export default function LandingPage() {
               <p className="text-white font-bold text-sm mb-3">Get Started</p>
               <div className="space-y-2">
                 <Link to="/register-tenant" className="block text-amber-400 hover:text-amber-300 text-xs font-semibold transition-colors">Sign Up Free →</Link>
-                <Link to="/admin/login" className="block text-slate-500 hover:text-slate-300 text-xs transition-colors">Restaurant Login</Link>
-                <Link to="/superadmin/login" className="block text-slate-500 hover:text-slate-300 text-xs transition-colors">Admin Console</Link>
               </div>
             </div>
           </div>
