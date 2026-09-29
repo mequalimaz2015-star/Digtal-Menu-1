@@ -43,13 +43,16 @@ router.post('/', async (req, res) => {
     const orderRef     = `ORD-${Date.now()}`
     const validTypes   = ['dine_in', 'takeaway', 'delivery']
     const resolvedType = validTypes.includes(orderType) ? orderType : 'dine_in'
+    const tableVal     = resolvedType === 'dine_in'
+      ? (tableNumber || '')
+      : resolvedType === 'delivery' ? 'Delivery' : 'Takeaway'
 
     let pickupNumber = null
     if (resolvedType === 'takeaway') {
       try {
         if (await checkDb()) {
           const cr = await query(
-            `SELECT COUNT(*) AS cnt FROM orders WHERE tenant_id=$1 AND order_type='takeaway' AND created_at >= CURDATE()`,
+            `SELECT COUNT(*) AS cnt FROM orders WHERE tenant_id=$1 AND order_type='takeaway'`,
             [req.tenantId]
           )
           pickupNumber = `T-${String((parseInt(cr.rows[0]?.cnt) || 0) + 1).padStart(3, '0')}`
@@ -60,22 +63,25 @@ router.post('/', async (req, res) => {
 
     if (await checkDb()) {
       try {
-        const orderResult = await query(`
+        // ── Step 1: plain INSERT (no RETURNING) ──────────────────────────────
+        // Avoids all RETURNING * emulation bugs on MySQL.
+        const insertResult = await query(`
           INSERT INTO orders (
-            tenant_id, order_ref, table_number, customer_name, phone, notes, subtotal,
-            vat, service_charge, grand_total, estimated_time, order_type, pickup_number,
-            pickup_time, delivery_address, delivery_lat, delivery_lng, delivery_fee,
-            delivery_zone_id, payment_method, payment_status, delivery_status, session_id
+            tenant_id, order_ref, table_number, customer_name, phone, notes, status,
+            subtotal, vat, service_charge, grand_total, estimated_time, order_type,
+            pickup_number, pickup_time, delivery_address, delivery_lat, delivery_lng,
+            delivery_fee, delivery_zone_id, payment_method, payment_status,
+            delivery_status, session_id
           )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
-          RETURNING *
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
         `, [
           req.tenantId,
           orderRef,
-          resolvedType === 'dine_in' ? (tableNumber || '') : (resolvedType === 'delivery' ? 'Delivery' : 'Takeaway'),
+          tableVal,
           customerName || '',
           phone || '',
           notes || '',
+          'new',
           parseFloat(subtotal) || 0,
           parseFloat(vat) || 0,
           parseFloat(serviceCharge) || 0,
@@ -91,12 +97,22 @@ router.post('/', async (req, res) => {
           deliveryZoneId ? parseInt(deliveryZoneId) : null,
           paymentMethod || 'cash',
           'pending',
-          resolvedType === 'delivery' ? 'pending' : 'pending',
+          'pending',
           sessionId || null,
         ])
-        const order = orderResult.rows[0]
-        const orderId = Number(order.id)  // cast BigInt → Number for MySQL
 
+        // ── Step 2: resolve the new row's id ─────────────────────────────────
+        // insertId is set by MySQL; for PostgreSQL fetch by order_ref.
+        let orderId = insertResult.insertId ? Number(insertResult.insertId) : null
+        if (!orderId) {
+          const fetched = await query(
+            `SELECT id FROM orders WHERE order_ref=$1 LIMIT 1`, [orderRef]
+          )
+          orderId = fetched.rows[0] ? Number(fetched.rows[0].id) : null
+        }
+        if (!orderId) throw new Error(`Could not resolve orderId for ${orderRef}`)
+
+        // ── Step 3: insert order_items ────────────────────────────────────────
         for (const item of items) {
           await query(`
             INSERT INTO order_items
@@ -113,53 +129,71 @@ router.post('/', async (req, res) => {
           ])
         }
 
-        // Fetch items back for the response
-        let orderItems = []
-        try {
-          const ir = await query(`SELECT * FROM order_items WHERE order_id=$1`, [orderId])
-          orderItems = ir.rows
-        } catch (_) {}
-
-        const finalOrder = { ...order, items: orderItems }
-
-        // Mark table as occupied
-        if (resolvedType === 'dine_in' && tableNumber) {
-          query(`UPDATE tables SET status='occupied' WHERE number=$1 AND tenant_id=$2`, [String(tableNumber), req.tenantId]).catch(() => {})
+        // ── Step 4: fetch the complete order row + items for the response ─────
+        const orderRow = await query(
+          `SELECT * FROM orders WHERE id=$1`, [orderId]
+        )
+        const order = orderRow.rows[0] || {
+          id: orderId, order_ref: orderRef, status: 'new',
+          table_number: tableVal, tenant_id: req.tenantId,
         }
 
+        const itemRows = await query(
+          `SELECT * FROM order_items WHERE order_id=$1`, [orderId]
+        )
+        const finalOrder = { ...order, items: itemRows.rows || [] }
+
+        // ── Step 5: mark table occupied ───────────────────────────────────────
+        if (resolvedType === 'dine_in' && tableNumber) {
+          query(
+            `UPDATE tables SET status='occupied' WHERE number=$1 AND tenant_id=$2`,
+            [String(tableNumber), req.tenantId]
+          ).catch(() => {})
+        }
+
+        // ── Step 6: emit real-time events ─────────────────────────────────────
         const io = req.app.get('io')
         if (io) {
-          // Notify the specific tenant room (admin/staff)
           io.to(`tenant-${req.tenantId}`).emit('new_order', finalOrder)
-          // Backward-compat global emit so older clients still work
           io.emit(`tenant-${req.tenantId}-new-order`, finalOrder)
         }
 
+        console.log(`✅ Order saved: ${orderRef} | tenant ${req.tenantId} | ${items.length} item(s)`)
         return res.status(201).json(finalOrder)
+
       } catch (dbErr) {
         console.error('❌ DB write failed in POST /orders:', dbErr.message)
         if (isConnError(dbErr)) dbAvailable = false
-        // Fall through to localStore only on connection errors
-        if (!isConnError(dbErr)) {
-          return res.status(500).json({ error: 'Failed to save order: ' + dbErr.message })
-        }
+        else return res.status(500).json({ error: 'Failed to save order: ' + dbErr.message })
       }
     }
 
-    // localStore fallback (only when DB truly offline)
+    // ── localStore fallback (only when DB truly offline) ─────────────────────
     const localOrder = local.createOrder({
       orderRef, tenantId: req.tenantId,
-      tableNumber: resolvedType === 'dine_in' ? tableNumber : resolvedType,
-      customerName, phone, notes, subtotal, vat, serviceCharge, grandTotal,
+      tableNumber: tableVal,
+      customerName, phone, notes, status: 'new',
+      subtotal, vat, serviceCharge, grandTotal,
       estimatedTime, orderType: resolvedType, pickupNumber, pickupTime,
       deliveryAddress, deliveryLat, deliveryLng,
     })
     for (const item of items) {
-      local.addOrderItem({ orderId: localOrder.id, name: item.name, price: item.price, qty: item.qty, modifiers: item.modifiers, specialInstructions: item.specialInstructions })
+      local.addOrderItem({
+        orderId: localOrder.id,
+        name: item.name,
+        price: item.price,
+        qty: item.qty,
+        modifiers: item.modifiers,
+        specialInstructions: item.specialInstructions,
+      })
     }
+    const completeLocalOrder = local.getOrderById(localOrder.id)
     const io = req.app.get('io')
-    if (io) io.emit('new_order', localOrder)
-    return res.status(201).json(local.getOrderById(localOrder.id))
+    if (io) {
+      io.to(`tenant-${req.tenantId}`).emit('new_order', completeLocalOrder)
+      io.emit(`tenant-${req.tenantId}-new-order`, completeLocalOrder)
+    }
+    return res.status(201).json(completeLocalOrder)
 
   } catch (err) {
     console.error('❌ POST /orders unhandled error:', err.message)

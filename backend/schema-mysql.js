@@ -297,19 +297,29 @@ async function initMySqlSchema(pool) {
   }
 
   // ── Live column migrations (idempotent — safe to run on every boot) ────────
+  // Note: ALTER TABLE ... ADD COLUMN IF NOT EXISTS is MariaDB-only and not
+  // supported on MySQL < 8.0.29. We check INFORMATION_SCHEMA manually instead.
   const columnMigrations = [
-    // session_id was missing from the original orders DDL — add it if absent
-    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS session_id VARCHAR(100) NULL`,
+    {
+      table: 'orders',
+      column: 'session_id',
+      definition: 'VARCHAR(100) NULL',
+    },
   ]
-  for (const sql of columnMigrations) {
+
+  for (const { table, column, definition } of columnMigrations) {
     try {
-      await pool.query(sql)
-    } catch (e) {
-      // Older MySQL versions don't support IF NOT EXISTS on ALTER TABLE;
-      // silently ignore "Duplicate column" errors
-      if (!e.message.toLowerCase().includes('duplicate column')) {
-        console.warn('Notice running column migration:', e.message)
+      const [cols] = await pool.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+        [table, column]
+      )
+      if (cols.length === 0) {
+        await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`)
+        console.log(`✅ Migration: added ${table}.${column}`)
       }
+    } catch (e) {
+      console.warn(`Notice running column migration (${table}.${column}):`, e.message)
     }
   }
 }
