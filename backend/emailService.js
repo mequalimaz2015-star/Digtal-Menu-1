@@ -24,7 +24,15 @@ async function getTransporter() {
         pass: process.env.SMTP_PASS,
       },
     })
-    console.log('📧 Email: using configured SMTP', process.env.SMTP_HOST)
+    // Verify the connection immediately so errors surface at startup
+    try {
+      await _transporter.verify()
+      console.log('📧 Email: SMTP connected OK —', process.env.SMTP_USER)
+    } catch (verifyErr) {
+      console.error('❌ Email: SMTP connection failed:', verifyErr.message)
+      _transporter = null // allow retry next call
+      throw verifyErr
+    }
   } else {
     // Create a disposable Ethereal test account — emails visible at ethereal.email
     const testAccount = await nodemailer.createTestAccount()
