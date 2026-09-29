@@ -72,7 +72,9 @@ export default function SupportChatPanel() {
     try {
       const res = await axios.get(`${API}/platform-chat/sessions`, { headers: authHeaders() })
       setSessions(res.data || [])
-    } catch (_) {}
+    } catch (err) {
+      console.error('[SupportChatPanel] fetchSessions error:', err?.response?.status, err?.response?.data || err.message)
+    }
     setLoading(false)
   }
 
@@ -95,7 +97,12 @@ export default function SupportChatPanel() {
     socketRef.current = socket
 
     socket.on('connect', () => {
+      console.log('[SupportChatPanel] socket connected, joining superadmin-support room')
       socket.emit('join_superadmin_support')
+    })
+
+    socket.on('connect_error', (err) => {
+      console.error('[SupportChatPanel] socket connect_error:', err.message)
     })
 
     // New message from a visitor
@@ -137,7 +144,16 @@ export default function SupportChatPanel() {
       }
     })
 
-    return () => socket.disconnect()
+    return () => {
+      socket.disconnect()
+    }
+  }, [])
+
+  // Poll every 8 seconds as a safety net for sessions arriving before socket connected
+  useEffect(() => {
+    const pollInterval = setInterval(fetchSessions, 8000)
+    return () => clearInterval(pollInterval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Scroll to bottom on new messages

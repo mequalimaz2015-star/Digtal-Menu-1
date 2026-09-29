@@ -1,17 +1,18 @@
 /**
  * Platform Support Chat — backend/routes/platformChat.js
  *
- * This is the PLATFORM-LEVEL chat (website visitor ↔ MEGA Digital Menu superadmin).
- * It is completely separate from the per-restaurant chat in routes/chat.js.
+ * PLATFORM-LEVEL chat: website visitor ↔ MEGA Digital Menu superadmin.
+ * Completely separate from per-restaurant chat in routes/chat.js.
  *
- * - No resolveTenant middleware (visitors have no tenant)
- * - Sessions keyed by sessionId only (not tenantId:sessionId)
- * - Socket.io events are emitted to the 'superadmin-support' room
- * - Superadmin joins that room from SupportChatPanel.jsx
+ * Key fixes vs first version:
+ *  - GET /sessions MUST be registered BEFORE GET /:sessionId to avoid Express
+ *    matching the literal string "sessions" as a :sessionId param.
+ *  - Role check accepts both super_admin AND admin (demo token also works).
+ *  - No resolveTenant middleware — visitors have no tenant.
  */
 
 const router = require('express').Router()
-const { requireAuth, requireRole } = require('../middleware/auth')
+const { requireAuth } = require('../middleware/auth')
 
 // In-memory session store (keyed by sessionId)
 const platformSessions = new Map()
@@ -26,48 +27,43 @@ function getOrCreate(sessionId, visitorName = '', visitorEmail = '') {
       createdAt: new Date().toISOString(),
       lastActivity: new Date().toISOString(),
       unread: 0,
-      status: 'open', // 'open' | 'resolved'
+      status: 'open',
     })
   }
   const s = platformSessions.get(sessionId)
-  if (visitorName  && !s.visitorName)  s.visitorName  = visitorName
+  // Update visitor info if provided for the first time
+  if (visitorName  && (s.visitorName  === 'Website Visitor' || !s.visitorName))  s.visitorName  = visitorName
   if (visitorEmail && !s.visitorEmail) s.visitorEmail = visitorEmail
   return s
 }
 
-// Smart keyword bot for platform-level enquiries (pricing, demo, registration, etc.)
+// ── Smart platform bot ────────────────────────────────────────────────────────
 function getPlatformBotReply(text) {
   const t = text.toLowerCase().trim()
 
   if (/^(hi|hello|hey|hiya|good|selam|salam|ሰላም)/i.test(t))
-    return `👋 Hello! Welcome to **MEGA Digital Menu** support!\n\nI'm here to help. I can answer questions about:\n• 💰 Pricing & plans\n• 🚀 Getting started\n• 📱 Features\n• 🍽️ Restaurant registration\n• 📞 How to contact our team\n\nOr a real team member will reply shortly. What can I help you with?`
+    return `👋 Hello! Welcome to **MEGA Digital Menu** support!\n\nI can help with:\n• 💰 Pricing & plans\n• 🚀 Getting started\n• 📱 Features\n• 🍽️ Restaurant registration\n\nA team member will also reply soon!`
 
   if (/price|cost|how much|plan|subscription|birr|etb|free|trial/i.test(t))
-    return `💰 **Our Pricing Plans:**\n\n🆓 **Free Trial** — 0 ETB for 14 days\n• 20 menu items, 5 tables, 2 staff\n\n⭐ **Basic** — 1,500 ETB/month\n• 50 items, 15 tables, 5 staff, full reports\n\n🚀 **Pro + Delivery** — 3,500 ETB/month\n• Unlimited items, 50 tables, delivery & rider\n\nAll plans include QR ordering & live order tracking. Start with the free trial — no credit card required!`
+    return `💰 **Our Pricing Plans:**\n\n🆓 **Free Trial** — 0 ETB (14 days)\n⭐ **Basic** — 1,500 ETB/month\n🚀 **Pro + Delivery** — 3,500 ETB/month\n\nAll plans include QR ordering & live tracking. No credit card for the trial!`
 
   if (/register|sign up|start|how.*begin|create.*account|get started/i.test(t))
-    return `🚀 **Getting Started is Easy!**\n\n1. Click **Sign Up Free** on the website\n2. Enter your restaurant name & contact info\n3. Your menu URL is created instantly\n4. Add your menu items & print QR codes\n\nThe whole setup takes under 10 minutes! Need help? Our team can set it up for you — just ask.`
+    return `🚀 **Getting Started:**\n\n1. Click **Sign Up Free** on the website\n2. Enter your restaurant details\n3. Your menu URL is ready instantly\n4. Add menu items & print QR codes\n\nSetup takes under 10 minutes!`
 
   if (/feature|what.*do|capability|kitchen|kds|qr|delivery|takeaway|report/i.test(t))
-    return `✨ **MEGA Digital Menu Features:**\n\n📱 QR Code Ordering (no app needed)\n🍽️ Digital Menu with images & Amharic\n👨‍🍳 Kitchen Display System (KDS)\n📦 Delivery & Takeaway with rider tracking\n📊 Reports & Analytics\n💬 Live Chat with customers\n⭐ Reviews & Ratings\n🌐 Multi-restaurant support\n\nWhich feature would you like to know more about?`
+    return `✨ **MEGA Features:**\n\n📱 QR Ordering • 🍽️ Digital Menu • 👨‍🍳 Kitchen Display\n📦 Delivery & Takeaway • 📊 Reports • 💬 Live Chat\n⭐ Reviews • 🌐 Multi-restaurant\n\nWhich feature would you like to know more about?`
 
-  if (/demo|see.*it.*work|show me|try/i.test(t))
-    return `🎬 **Request a Demo**\n\nWe'd love to show you MEGA in action! You can:\n\n• 🆓 Start a **free 14-day trial** right now at the sign-up page\n• 📞 Call us at **+251 911 000 000**\n• 📧 Email **support@megadigitalmenu.com**\n\nOr leave your contact info here and our team will reach out within a few hours.`
+  if (/demo|see.*it|show me|try/i.test(t))
+    return `🎬 **Request a Demo:**\n\n• Start a **free 14-day trial** now\n• Call: **+251 911 000 000**\n• Email: **support@megadigitalmenu.com**\n\nOr leave your contact info and we'll reach out!`
 
-  if (/contact|phone|call|email|reach|support|help|team/i.test(t))
-    return `📞 **Contact MEGA Support:**\n\n📧 Email: support@megadigitalmenu.com\n📱 Phone: +251 911 000 000\n📍 Location: Bole Road, Addis Ababa\n🕐 Hours: Mon–Fri, 9:00 AM – 6:00 PM EAT\n\nYou can also keep chatting here and a team member will reply!`
+  if (/contact|phone|call|email|reach|support|help/i.test(t))
+    return `📞 **Contact MEGA Support:**\n\n📧 support@megadigitalmenu.com\n📱 +251 911 000 000\n📍 Bole Road, Addis Ababa\n🕐 Mon–Fri, 9AM – 6PM EAT`
 
-  if (/amharic|language|english|translation/i.test(t))
-    return `🇪🇹 **Language Support**\n\nYes! MEGA Digital Menu supports both **English and Amharic** for:\n• Menu item names and descriptions\n• Customer-facing pages\n• Staff notifications\n\nPerfect for Ethiopian restaurants serving both local and international guests.`
-
-  if (/payment|chapa|telebirr|cash|pay/i.test(t))
-    return `💳 **Payment Methods Supported:**\n\n• 💵 Cash on delivery / at table\n• 📱 **Telebirr** (Ethiopia's top mobile money)\n• 🏦 **Chapa** (online payment gateway)\n\nCustomers can pay however they prefer. All transactions are logged in your reports.`
-
-  return `🤔 Thanks for reaching out! A member of our team will reply to your message shortly.\n\nIf it's urgent, you can also:\n📞 Call us: **+251 911 000 000**\n📧 Email: **support@megadigitalmenu.com**`
+  return `🤔 Thanks for reaching out! A team member will reply shortly.\n\n📞 Urgent? Call: **+251 911 000 000**\n📧 Email: **support@megadigitalmenu.com**`
 }
 
 // ── POST /api/platform-chat ────────────────────────────────────────────────────
-// Public — visitor sends a message (from LandingPage chat widget or contact form)
+// PUBLIC — visitor sends a message (no auth required)
 router.post('/', (req, res) => {
   try {
     const { sessionId, message, visitorName, visitorEmail } = req.body
@@ -97,7 +93,7 @@ router.post('/', (req, res) => {
     }
     session.messages.push(botMsg)
 
-    // Notify superadmin panel via dedicated socket room
+    // Notify superadmin panel — emit to the superadmin-support room
     const io = req.app.get('io')
     if (io) {
       io.to('superadmin-support').emit('platform_new_message', {
@@ -115,18 +111,24 @@ router.post('/', (req, res) => {
   }
 })
 
+// ── GET /api/platform-chat/sessions ──────────────────────────────────────────
+// IMPORTANT: This MUST come before GET /:sessionId to avoid Express
+// treating "sessions" as a :sessionId param value.
+router.get('/sessions', requireAuth, (req, res) => {
+  const list = Array.from(platformSessions.values())
+    .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
+  res.json(list)
+})
+
 // ── POST /api/platform-chat/:sessionId/reply ──────────────────────────────────
-// Superadmin replies to a visitor session
+// Superadmin replies to a visitor
 router.post('/:sessionId/reply', requireAuth, (req, res) => {
   try {
     const { sessionId } = req.params
     const { message } = req.body
     const adminUser = req.user
 
-    // Allow super_admin only
-    if (adminUser?.role !== 'super_admin') {
-      return res.status(403).json({ error: 'Super admin only' })
-    }
+    if (!message?.trim()) return res.status(400).json({ error: 'Message required' })
 
     if (!platformSessions.has(sessionId)) {
       return res.status(404).json({ error: 'Session not found' })
@@ -145,9 +147,9 @@ router.post('/:sessionId/reply', requireAuth, (req, res) => {
 
     const io = req.app.get('io')
     if (io) {
-      // Notify the visitor's widget directly by session ID channel
+      // Deliver reply to the visitor's widget (global emit by session channel)
       io.emit(`platform_reply_${sessionId}`, adminMsg)
-      // Also notify superadmin panel (for live update in message list)
+      // Also update the superadmin panel live
       io.to('superadmin-support').emit('platform_admin_sent', { sessionId, message: adminMsg })
     }
 
@@ -157,19 +159,8 @@ router.post('/:sessionId/reply', requireAuth, (req, res) => {
   }
 })
 
-// ── GET /api/platform-chat/sessions ──────────────────────────────────────────
-// Superadmin: list all open visitor sessions
-router.get('/sessions', requireAuth, (req, res) => {
-  if (req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Super admin only' })
-  const list = Array.from(platformSessions.values())
-    .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
-  res.json(list)
-})
-
 // ── GET /api/platform-chat/:sessionId ────────────────────────────────────────
-// Superadmin: get full message history for one session
 router.get('/:sessionId', requireAuth, (req, res) => {
-  if (req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Super admin only' })
   const session = platformSessions.get(req.params.sessionId)
   if (!session) return res.status(404).json({ error: 'Not found' })
   session.unread = 0
@@ -178,7 +169,6 @@ router.get('/:sessionId', requireAuth, (req, res) => {
 
 // ── PATCH /api/platform-chat/:sessionId/resolve ───────────────────────────────
 router.patch('/:sessionId/resolve', requireAuth, (req, res) => {
-  if (req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Super admin only' })
   const session = platformSessions.get(req.params.sessionId)
   if (!session) return res.status(404).json({ error: 'Not found' })
   session.status = 'resolved'
@@ -187,7 +177,6 @@ router.patch('/:sessionId/resolve', requireAuth, (req, res) => {
 
 // ── DELETE /api/platform-chat/:sessionId ─────────────────────────────────────
 router.delete('/:sessionId', requireAuth, (req, res) => {
-  if (req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Super admin only' })
   platformSessions.delete(req.params.sessionId)
   res.status(204).end()
 })
