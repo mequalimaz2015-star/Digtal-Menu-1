@@ -80,12 +80,13 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-orange-600 rounded-xl flex items-center justify-center text-xl shadow-lg">
-                🍽️
-              </div>
-              <span className="font-black text-white text-lg tracking-tight">MEGA <span className="text-amber-400">Digital</span> Menu</span>
-            </div>
+            <a href="#home" className="flex items-center">
+              <img
+                src="/mega-logo.png"
+                alt="MEGA Digital Menu"
+                className="h-12 w-auto object-contain"
+              />
+            </a>
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-6">
@@ -162,7 +163,7 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link to="/register-tenant"
                   className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-base rounded-2xl shadow-2xl shadow-amber-500/30 transition-all transform hover:scale-105">
-                  🍽️ Start Free 14-Day Trial
+                  <img src="/mega-logo.png" alt="" className="h-5 w-auto object-contain" aria-hidden="true" /> Start Free 14-Day Trial
                 </Link>
                 <a href="#features"
                   className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 border border-slate-700 hover:border-slate-500 text-white font-semibold text-base rounded-2xl transition-all hover:bg-slate-800">
@@ -445,7 +446,7 @@ export default function LandingPage() {
           <p className="text-slate-900/80 text-lg mb-8">Join 500+ restaurants already using MEGA Digital Menu. Start your free 14-day trial today.</p>
           <Link to="/register-tenant"
             className="inline-flex items-center gap-2 px-10 py-4 bg-slate-950 text-white font-black text-lg rounded-2xl hover:bg-slate-900 transition-all shadow-2xl shadow-slate-950/50">
-            🍽️ Launch Your Restaurant Free
+            <img src="/mega-logo.png" alt="" className="h-6 w-auto object-contain" aria-hidden="true" /> Launch Your Restaurant Free
           </Link>
         </div>
       </section>
@@ -456,8 +457,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-orange-600 rounded-lg flex items-center justify-center text-base">🍽️</div>
-                <span className="font-black text-white text-sm">MEGA Digital Menu</span>
+                <img src="/mega-logo.png" alt="MEGA Digital Menu" className="h-10 w-auto object-contain" />
               </div>
               <p className="text-slate-500 text-xs leading-relaxed">Ethiopia's leading digital menu and restaurant management platform.</p>
             </div>
