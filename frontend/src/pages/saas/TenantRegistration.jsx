@@ -10,7 +10,9 @@ export default function TenantRegistration() {
     admin_name: '',
     email: '',
     phone: '',
-    password: ''
+    password: '',
+    tin_number: '',
+    address: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -205,6 +207,33 @@ export default function TenantRegistration() {
               className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
               placeholder="owner@restaurant.com"
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                TIN Number
+              </label>
+              <input
+                type="text"
+                value={formData.tin_number}
+                onChange={(e) => setFormData({ ...formData, tin_number: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                placeholder="e.g. 0012345678"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                Restaurant Location
+              </label>
+              <input
+                type="text"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                placeholder="Bole Road, Addis Ababa"
+              />
+            </div>
           </div>
 
           <div>

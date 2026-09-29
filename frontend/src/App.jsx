@@ -47,6 +47,7 @@ import SAAnnouncements from './pages/superadmin/SAAnnouncements'
 import SASettings from './pages/superadmin/SASettings'
 import TenantRegistration from './pages/saas/TenantRegistration'
 import RiderDashboard from './pages/rider/RiderDashboard'
+import LandingPage from './pages/landing/LandingPage'
 
 export default function App() {
   const { darkMode } = useAppStore()
@@ -91,6 +92,9 @@ export default function App() {
         {/* Tenant Owner SaaS Registration */}
         <Route path="/register-tenant" element={<TenantRegistration />} />
         <Route path="/saas" element={<TenantRegistration />} />
+        <Route path="/home" element={<LandingPage />} />
+        <Route path="/about" element={<LandingPage />} />
+        <Route path="/contact" element={<LandingPage />} />
 
         {/* Rider Portal Route */}
         <Route path="/rider" element={<RiderDashboard />} />
