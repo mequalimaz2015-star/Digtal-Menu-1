@@ -3,7 +3,6 @@ import { useEffect } from 'react'
 import useAppStore from './store/useAppStore'
 
 // Customer Pages
-import SplashScreen from './pages/customer/SplashScreen'
 import HomePage from './pages/customer/HomePage'
 import CartPage from './pages/customer/CartPage'
 import CheckoutPage from './pages/customer/CheckoutPage'
@@ -92,15 +91,15 @@ export default function App() {
         {/* Tenant Owner SaaS Registration */}
         <Route path="/register-tenant" element={<TenantRegistration />} />
         <Route path="/saas" element={<TenantRegistration />} />
+
+        {/* Public Landing / Marketing Page */}
+        <Route path="/" element={<LandingPage />} />
         <Route path="/home" element={<LandingPage />} />
         <Route path="/about" element={<LandingPage />} />
         <Route path="/contact" element={<LandingPage />} />
 
         {/* Rider Portal Route */}
         <Route path="/rider" element={<RiderDashboard />} />
-
-        {/* Default Customer Routes */}
-        <Route path="/" element={<><HomePage /><ChatWidget /></>} />
         <Route path="/menu" element={<><HomePage /><ChatWidget /></>} />
         <Route path="/menu/:tableId" element={<><HomePage /><ChatWidget /></>} />
         <Route path="/table/:tableId" element={<><HomePage /><ChatWidget /></>} />
