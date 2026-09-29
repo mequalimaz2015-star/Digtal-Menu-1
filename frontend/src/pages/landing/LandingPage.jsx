@@ -96,12 +96,12 @@ export default function LandingPage() {
 
             {/* CTA buttons */}
             <div className="hidden md:flex items-center gap-3">
-              <a href="/admin/login" className="text-sm font-semibold text-slate-300 hover:text-white px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors">
+              <Link to="/admin/login" className="text-sm font-semibold text-slate-300 hover:text-white px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors">
                 Sign In
-              </a>
-              <a href="/register-tenant" className="text-sm font-bold px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 rounded-xl shadow-lg shadow-amber-500/25 transition-all">
+              </Link>
+              <Link to="/register-tenant" className="text-sm font-bold px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 rounded-xl shadow-lg shadow-amber-500/25 transition-all">
                 Sign Up Free
-              </a>
+              </Link>
             </div>
 
             {/* Mobile hamburger */}
@@ -126,8 +126,8 @@ export default function LandingPage() {
                   </a>
                 ))}
                 <div className="flex gap-2 pt-2">
-                  <a href="/admin/login" className="flex-1 text-center py-2.5 border border-slate-700 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">Sign In</a>
-                  <a href="/register-tenant" className="flex-1 text-center py-2.5 bg-amber-500 text-slate-950 rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors">Sign Up Free</a>
+                  <Link to="/admin/login" className="flex-1 text-center py-2.5 border border-slate-700 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">Sign In</Link>
+                  <Link to="/register-tenant" className="flex-1 text-center py-2.5 bg-amber-500 text-slate-950 rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors">Sign Up Free</Link>
                 </div>
               </div>
             </motion.div>
@@ -160,10 +160,10 @@ export default function LandingPage() {
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a href="/register-tenant"
+                <Link to="/register-tenant"
                   className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-base rounded-2xl shadow-2xl shadow-amber-500/30 transition-all transform hover:scale-105">
                   🍽️ Start Free 14-Day Trial
-                </a>
+                </Link>
                 <a href="#features"
                   className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 border border-slate-700 hover:border-slate-500 text-white font-semibold text-base rounded-2xl transition-all hover:bg-slate-800">
                   See How It Works ↓
@@ -292,14 +292,14 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <a href="/register-tenant"
+                <Link to="/register-tenant"
                   className={`block text-center py-3 rounded-xl font-bold text-sm transition-all ${
                     plan.highlight
                       ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 hover:from-amber-600 hover:to-orange-700 shadow-lg shadow-amber-500/20'
                       : 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700'
                   }`}>
                   {plan.cta}
-                </a>
+                </Link>
               </motion.div>
             ))}
           </div>
@@ -443,10 +443,10 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-3xl sm:text-4xl font-black text-slate-950 mb-4">Ready to Go Digital?</h2>
           <p className="text-slate-900/80 text-lg mb-8">Join 500+ restaurants already using MEGA Digital Menu. Start your free 14-day trial today.</p>
-          <a href="/register-tenant"
+          <Link to="/register-tenant"
             className="inline-flex items-center gap-2 px-10 py-4 bg-slate-950 text-white font-black text-lg rounded-2xl hover:bg-slate-900 transition-all shadow-2xl shadow-slate-950/50">
             🍽️ Launch Your Restaurant Free
-          </a>
+          </Link>
         </div>
       </section>
 
@@ -480,9 +480,9 @@ export default function LandingPage() {
             <div>
               <p className="text-white font-bold text-sm mb-3">Get Started</p>
               <div className="space-y-2">
-                <a href="/register-tenant" className="block text-amber-400 hover:text-amber-300 text-xs font-semibold transition-colors">Sign Up Free →</a>
-                <a href="/admin/login" className="block text-slate-500 hover:text-slate-300 text-xs transition-colors">Restaurant Login</a>
-                <a href="/superadmin/login" className="block text-slate-500 hover:text-slate-300 text-xs transition-colors">Admin Console</a>
+                <Link to="/register-tenant" className="block text-amber-400 hover:text-amber-300 text-xs font-semibold transition-colors">Sign Up Free →</Link>
+                <Link to="/admin/login" className="block text-slate-500 hover:text-slate-300 text-xs transition-colors">Restaurant Login</Link>
+                <Link to="/superadmin/login" className="block text-slate-500 hover:text-slate-300 text-xs transition-colors">Admin Console</Link>
               </div>
             </div>
           </div>
