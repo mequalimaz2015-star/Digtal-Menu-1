@@ -140,6 +140,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_tx_ref VARCHAR(100);
 -- order_status_updated socket events ONLY to the customer who placed the order
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS session_id VARCHAR(100);
 
+-- menu_item_ref: human-readable item ID derived from restaurant name, e.g. B-001 for "Bloom"
+ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS menu_item_ref VARCHAR(30);
+
 -- REVIEWS TABLE
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE;
 

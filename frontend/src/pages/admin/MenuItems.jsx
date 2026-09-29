@@ -229,6 +229,7 @@ export default function MenuItems() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr className="text-gray-500 dark:text-gray-400 text-left">
+                  <th className="px-4 py-3.5 font-semibold w-24">ID</th>
                   <th className="px-5 py-3.5 font-semibold">Item</th>
                   <th className="px-4 py-3.5 font-semibold">Category</th>
                   <th className="px-4 py-3.5 font-semibold">Price</th>
@@ -242,6 +243,15 @@ export default function MenuItems() {
                   const cat = getCat(item.categoryId)
                   return (
                     <motion.tr key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }} className={`border-t border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 ${!item.isAvailable ? 'opacity-60' : ''}`}>
+                      <td className="px-4 py-3">
+                        {item.menuItemRef ? (
+                          <span className="inline-block px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[11px] font-black tracking-wide border border-amber-200 dark:border-amber-800">
+                            {item.menuItemRef}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0">

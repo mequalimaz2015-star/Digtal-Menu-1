@@ -112,6 +112,7 @@ function makeStore(set, get) {
           calories:        i.calories || null,
           discount:        Number(i.discount) || 0,
           allergens:       Array.isArray(i.allergens) ? i.allergens : (i.allergens ? String(i.allergens).split(',').map(s => s.trim()).filter(Boolean) : []),
+          menuItemRef:     i.menu_item_ref || i.menuItemRef || '',
         }))
 
         const normMods = mods.map(g => ({
@@ -190,6 +191,7 @@ function makeStore(set, get) {
           calories:        i.calories || null,
           discount:        Number(i.discount) || 0,
           allergens:       i.allergens ? String(i.allergens).split(',').map(s => s.trim()).filter(Boolean) : [],
+          menuItemRef:     i.menu_item_ref || i.menuItemRef || '',
         })) : []
 
         const normMods = Array.isArray(mods) ? mods.map(g => ({

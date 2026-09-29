@@ -387,6 +387,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
                   <thead className="bg-slate-900 sticky top-0 z-10">
                     <tr className="text-slate-400 text-left">
                       <th className="px-3 py-2.5 font-semibold w-8">#</th>
+                      <th className="px-3 py-2.5 font-semibold w-20">Menu ID</th>
                       <th className="px-3 py-2.5 font-semibold min-w-[140px]">Name</th>
                       <th className="px-3 py-2.5 font-semibold min-w-[80px]">Price (ETB)</th>
                       <th className="px-3 py-2.5 font-semibold min-w-[200px]">Description</th>
@@ -413,6 +414,11 @@ export default function AIMenuImportModal({ onClose, onImported }) {
                         {catItems.map(item => (
                           <tr key={item._idx} className="border-t border-slate-800/60 hover:bg-slate-900/40 transition-colors">
                             <td className="px-3 py-2 text-slate-600">{item._idx + 1}</td>
+                            <td className="px-3 py-2">
+                              <span className="inline-block px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black tracking-wide whitespace-nowrap">
+                                auto
+                              </span>
+                            </td>
                             <td className="px-3 py-2">
                               <EditCell value={item.name} onChange={v => updateItem(item._idx, 'name', v)} className="text-white font-medium" />
                               {item.nameAm && <p className="text-slate-500 text-[10px] mt-0.5">{item.nameAm}</p>}

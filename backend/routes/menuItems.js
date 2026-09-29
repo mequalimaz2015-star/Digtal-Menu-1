@@ -10,7 +10,46 @@ router.use(resolveTenant)
 const cols = `id, tenant_id, category_id, name, name_am, description, description_am,
   price, image_url, prep_time, is_spicy, is_vegetarian, is_available,
   is_featured, is_popular, is_best_seller, chef_recommended,
-  rating, review_count, calories, discount, allergens`
+  rating, review_count, calories, discount, allergens, menu_item_ref`
+
+// ── Generate a restaurant-prefixed menu item ref: e.g. "B-001" for "Bloom" ───
+// Prefix = first letter(s) of each word in the restaurant name, max 3 chars
+// Number = last used number for this tenant + 1, zero-padded to 3 digits
+async function generateMenuItemRef(tenantId) {
+  try {
+    // Get restaurant name
+    const tRes = await query(`SELECT name FROM tenants WHERE id=$1`, [tenantId])
+    const tenantName = tRes.rows[0]?.name || 'MENU'
+
+    // Build prefix: first letter of each word, uppercase, max 3 chars
+    const prefix = tenantName
+      .split(/\s+/)
+      .map(w => w.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 3)
+      .replace(/[^A-Z]/g, 'M') || 'M'
+
+    // Find the highest existing ref number for this tenant's prefix
+    const refRes = await query(
+      `SELECT menu_item_ref FROM menu_items
+       WHERE tenant_id=$1 AND menu_item_ref LIKE $2
+       ORDER BY menu_item_ref DESC LIMIT 1`,
+      [tenantId, `${prefix}-%`]
+    )
+
+    let nextNum = 1
+    if (refRes.rows[0]?.menu_item_ref) {
+      const parts = refRes.rows[0].menu_item_ref.split('-')
+      const lastNum = parseInt(parts[parts.length - 1]) || 0
+      nextNum = lastNum + 1
+    }
+
+    return `${prefix}-${String(nextNum).padStart(3, '0')}`
+  } catch (_) {
+    // Fallback if DB not available
+    return `M-${String(Date.now()).slice(-4)}`
+  }
+}
 
 // GET /api/menu-items  (public customer)
 router.get('/', async (req, res) => {
@@ -120,11 +159,13 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), checkM
       return res.status(400).json({ error: 'Name, price and category required' })
 
     try {
+      const menuItemRef = await generateMenuItemRef(req.tenantId)
+
       const result = await query(`
         INSERT INTO menu_items (tenant_id,category_id,name,name_am,description,description_am,price,image_url,
           prep_time,is_spicy,is_vegetarian,is_available,is_featured,is_popular,is_best_seller,
-          chef_recommended,rating,calories,discount,allergens)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          chef_recommended,rating,calories,discount,allergens,menu_item_ref)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
         RETURNING *
       `, [
         req.tenantId,
@@ -147,6 +188,7 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), checkM
         d.calories ? parseInt(d.calories) : null,
         parseFloat(d.discount) || 0,
         Array.isArray(d.allergens) ? d.allergens.join(',') : d.allergens || '',
+        menuItemRef,
       ])
       if (result.rows[0]) return res.status(201).json(result.rows[0])
     } catch (dbErr) {
@@ -253,11 +295,40 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
     const created = []
     const skipped = []
 
+    // Get the prefix + current counter once, then increment in-process
+    // (avoids N separate DB reads for each item)
+    let refPrefix = 'M'
+    let refCounter = 1
+    try {
+      const tRes = await query(`SELECT name FROM tenants WHERE id=$1`, [tid])
+      const tName = tRes.rows[0]?.name || 'MENU'
+      refPrefix = tName
+        .split(/\s+/)
+        .map(w => w.charAt(0).toUpperCase())
+        .join('')
+        .slice(0, 3)
+        .replace(/[^A-Z]/g, 'M') || 'M'
+
+      // Find the last ref number used for this prefix
+      const lastRes = await query(
+        `SELECT menu_item_ref FROM menu_items
+         WHERE tenant_id=$1 AND menu_item_ref LIKE $2
+         ORDER BY menu_item_ref DESC LIMIT 1`,
+        [tid, `${refPrefix}-%`]
+      )
+      if (lastRes.rows[0]?.menu_item_ref) {
+        const parts = lastRes.rows[0].menu_item_ref.split('-')
+        refCounter = (parseInt(parts[parts.length - 1]) || 0) + 1
+      }
+    } catch (_) {}
+
     for (const item of items) {
       if (!item.name || !item.price) { skipped.push(item.name || '(unnamed)'); continue }
 
       const catId = categoryIdMap[item.categoryName]
       if (!catId) { skipped.push(item.name); continue }
+
+      const menuItemRef = `${refPrefix}-${String(refCounter).padStart(3, '0')}`
 
       try {
         const r = await query(`
@@ -265,9 +336,9 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
             (tenant_id, category_id, name, name_am, description, description_am,
              price, image_url, prep_time, is_spicy, is_vegetarian, is_available,
              is_featured, is_popular, is_best_seller, chef_recommended,
-             rating, calories, discount, allergens)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-          RETURNING id
+             rating, calories, discount, allergens, menu_item_ref)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+          RETURNING id, menu_item_ref
         `, [
           tid,
           catId,
@@ -280,17 +351,19 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
           parseInt(item.prepTime || item.prep_time) || 15,
           item.isSpicy        ? true : false,
           item.isVegetarian   ? true : false,
-          true,  // is_available
+          true,
           item.isFeatured     ? true : false,
           item.isBestSeller   ? true : false,
           item.isBestSeller   ? true : false,
-          false, // chef_recommended
+          false,
           parseFloat(item.rating) || 4.5,
           item.calories ? parseInt(item.calories) : null,
           parseFloat(item.discount) || 0,
           item.allergens || '',
+          menuItemRef,
         ])
-        created.push({ id: r.rows[0].id, name: item.name })
+        created.push({ id: r.rows[0].id, name: item.name, ref: r.rows[0].menu_item_ref })
+        refCounter++ // only increment on success
       } catch (itemErr) {
         console.warn(`Bulk import: item "${item.name}" error:`, itemErr.message)
         skipped.push(item.name)
