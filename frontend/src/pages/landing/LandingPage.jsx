@@ -560,7 +560,7 @@ export default function LandingPage() {
                 Our platform supports both English and Amharic menus, Ethiopian Birr currency, and the local payment ecosystem. Whether you run a small café or a multi-location chain, MEGA scales with you.
               </p>
               <div className="grid grid-cols-3 gap-4">
-                {[['500+','Restaurants'],['50,000+','Orders/month'],['4.9★','Rating']].map(([val, label]) => (
+                {[['3+','Restaurants'],['500+','Orders/month'],['4.9★','Rating']].map(([val, label]) => (
                   <div key={label} className="text-center bg-slate-900 border border-slate-800 rounded-xl p-4">
                     <div className="text-2xl font-black text-amber-400">{val}</div>
                     <div className="text-xs text-slate-400 mt-1">{label}</div>
@@ -597,7 +597,7 @@ export default function LandingPage() {
               <div className="space-y-4">
                 {[
                   { icon: '📧', label: 'Email',    val: 'support@megadigitalmenu.com' },
-                  { icon: '📱', label: 'Phone',    val: '+251 911 000 000' },
+                  { icon: '📱', label: 'Phone',    val: '+251 912 698 553' },
                   { icon: '📍', label: 'Location', val: 'Bole Road, Addis Ababa, Ethiopia' },
                   { icon: '🕐', label: 'Hours',    val: 'Mon–Fri: 9:00 AM – 6:00 PM EAT' },
                 ].map(item => (
@@ -659,7 +659,7 @@ export default function LandingPage() {
       <section className="py-20 bg-gradient-to-r from-amber-500 to-orange-600">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-3xl sm:text-4xl font-black text-slate-950 mb-4">Ready to Go Digital?</h2>
-          <p className="text-slate-900/80 text-lg mb-8">Join 500+ restaurants already using MEGA Digital Menu. Start your free 14-day trial today.</p>
+          <p className="text-slate-900/80 text-lg mb-8">Join restaurants already using MEGA Digital Menu. Start your free 14-day trial today.</p>
           <Link to="/register-tenant"
             className="inline-flex items-center gap-2 px-10 py-4 bg-slate-950 text-white font-black text-lg rounded-2xl hover:bg-slate-900 transition-all shadow-2xl shadow-slate-950/50">
             <img src="/mega-logo.png" alt="" className="h-6 w-auto object-contain" aria-hidden="true" /> Launch Your Restaurant Free
