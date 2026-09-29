@@ -2,8 +2,33 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { io } from 'socket.io-client'
 import { FiSend, FiRefreshCw, FiCheck, FiTrash2, FiMessageSquare, FiMail, FiAlertCircle } from 'react-icons/fi'
-// Use the configured axios client — it attaches Authorization header via interceptor
-import client from '../../api/client'
+
+// Resolve API base — same logic as client.js but without going through the interceptor
+// so tenant-slug headers and token confusion don't affect platform-chat requests
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
+
+function saToken() {
+  return localStorage.getItem('superadmin_token') || localStorage.getItem('token') || ''
+}
+
+function authHeader() {
+  return { Authorization: `Bearer ${saToken()}`, 'Content-Type': 'application/json' }
+}
+
+async function apiCall(method, path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: authHeader(),
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    let errMsg = res.statusText
+    try { const j = await res.json(); errMsg = j.error || j.message || errMsg } catch (_) {}
+    throw Object.assign(new Error(errMsg), { status: res.status })
+  }
+  if (res.status === 204) return null
+  return res.json()
+}
 
 function timeAgo(iso) {
   if (!iso) return ''
@@ -60,21 +85,15 @@ export default function SupportChatPanel() {
   const activeIdRef    = useRef(null)
   activeIdRef.current  = activeId
 
-  // ── Fetch sessions using the configured client (auto-attaches auth header) ──
+  // ── Fetch sessions using direct fetch — bypasses axios interceptors ─────────
   const fetchSessions = useCallback(async () => {
     setApiError(null)
     try {
-      // Temporarily override token for superadmin if needed
-      const saToken = localStorage.getItem('superadmin_token') || localStorage.getItem('token')
-      const res = await client.get('/platform-chat/sessions', {
-        headers: { Authorization: `Bearer ${saToken}` },
-      })
-      setSessions(Array.isArray(res.data) ? res.data : [])
+      const data = await apiCall('GET', '/platform-chat/sessions')
+      setSessions(Array.isArray(data) ? data : [])
     } catch (err) {
-      const status = err?.response?.status
-      const msg    = err?.response?.data?.error || err.message
-      console.error('[SupportChatPanel] fetchSessions failed:', status, msg)
-      setApiError(`${status ?? 'Network error'}: ${msg}`)
+      console.error('[SupportChatPanel] fetchSessions failed:', err.status, err.message)
+      setApiError(`${err.status ?? 'Network error'}: ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -82,15 +101,12 @@ export default function SupportChatPanel() {
 
   const loadSession = useCallback(async (sessionId) => {
     try {
-      const saToken = localStorage.getItem('superadmin_token') || localStorage.getItem('token')
-      const res = await client.get(`/platform-chat/${sessionId}`, {
-        headers: { Authorization: `Bearer ${saToken}` },
-      })
-      setMessages(res.data.messages || [])
+      const data = await apiCall('GET', `/platform-chat/${sessionId}`)
+      setMessages(data.messages || [])
       setUnreadMap(prev => ({ ...prev, [sessionId]: 0 }))
       setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, unread: 0 } : s))
     } catch (err) {
-      console.error('[SupportChatPanel] loadSession error:', err?.response?.status, err?.response?.data)
+      console.error('[SupportChatPanel] loadSession error:', err.status, err.message)
     }
   }, [])
 
@@ -165,42 +181,31 @@ export default function SupportChatPanel() {
     if (!reply.trim() || !activeId || sending) return
     setSending(true)
 
-    const optimistic = {
-      role: 'admin', text: reply.trim(),
-      ts: new Date().toISOString(), id: `opt-${Date.now()}`, adminName: 'MEGA Support',
-    }
-    setMessages(prev => [...prev, optimistic])
-    setReply('')
-
     try {
-      const saToken = localStorage.getItem('superadmin_token') || localStorage.getItem('token')
-      await client.post(
-        `/platform-chat/${activeId}/reply`,
-        { message: optimistic.text },
-        { headers: { Authorization: `Bearer ${saToken}` } }
-      )
+      const optimistic = {
+        role: 'admin', text: reply.trim(),
+        ts: new Date().toISOString(), id: `opt-${Date.now()}`, adminName: 'MEGA Support',
+      }
+      setMessages(prev => [...prev, optimistic])
+      setReply('')
+
+      await apiCall('POST', `/platform-chat/${activeId}/reply`, { message: optimistic.text })
     } catch (err) {
-      console.error('[SupportChatPanel] reply error:', err?.response?.data)
+      console.error('[SupportChatPanel] reply error:', err.status, err.message)
     }
     setSending(false)
   }
 
   const handleResolve = async (sessionId) => {
     try {
-      const saToken = localStorage.getItem('superadmin_token') || localStorage.getItem('token')
-      await client.patch(`/platform-chat/${sessionId}/resolve`, {}, {
-        headers: { Authorization: `Bearer ${saToken}` },
-      })
+      await apiCall('PATCH', `/platform-chat/${sessionId}/resolve`)
       setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'resolved' } : s))
     } catch (_) {}
   }
 
   const handleDelete = async (sessionId) => {
     try {
-      const saToken = localStorage.getItem('superadmin_token') || localStorage.getItem('token')
-      await client.delete(`/platform-chat/${sessionId}`, {
-        headers: { Authorization: `Bearer ${saToken}` },
-      })
+      await apiCall('DELETE', `/platform-chat/${sessionId}`)
       setSessions(prev => prev.filter(s => s.id !== sessionId))
       if (activeId === sessionId) { setActiveId(null); setMessages([]) }
     } catch (_) {}
