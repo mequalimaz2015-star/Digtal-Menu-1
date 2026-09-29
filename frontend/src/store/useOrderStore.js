@@ -193,6 +193,17 @@ export const useOrderStore = create(
 
       deleteOrder: (id) => set(s => ({ orders: s.orders.filter(o => o.id !== id) })),
 
+      // ── Add a single notification (called by NotificationBell on socket event) ──
+      addNotification: (notif) => set(s => {
+        // Deduplicate: skip if same orderId already in the list (within last 30s)
+        const isDuplicate = s.notifications.some(n => n.orderId === notif.orderId)
+        if (isDuplicate) return {}
+        return {
+          unreadCount: s.unreadCount + 1,
+          notifications: [notif, ...s.notifications].slice(0, 50),
+        }
+      }),
+
       markAllRead: () => set(s => ({
         unreadCount: 0,
         notifications: s.notifications.map(n => ({ ...n, read: true })),

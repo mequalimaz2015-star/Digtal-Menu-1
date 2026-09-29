@@ -6,6 +6,24 @@ import { useOrderStore } from '../../store/useOrderStore'
 import toast from 'react-hot-toast'
 import client from '../../api/client'
 
+// Resolve admin's numeric tenant ID from localStorage / JWT
+function getAdminTenantId() {
+  try {
+    const user = JSON.parse(localStorage.getItem('admin-user') || '{}')
+    if (user.tenant_id) return user.tenant_id
+    const token = localStorage.getItem('token')
+    if (token && token !== 'demo-admin-token') {
+      const parts = token.split('.')
+      if (parts.length === 3) {
+        const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+        const payload = JSON.parse(atob(padded + '=='.slice((padded.length % 4) || 4)))
+        return payload.tenant_id || null
+      }
+    }
+  } catch (_) {}
+  return null
+}
+
 const statusConfig = {
   new: { label: 'New', bg: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', dot: 'bg-blue-500' },
   preparing: { label: 'Preparing', bg: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', dot: 'bg-yellow-500' },
@@ -39,14 +57,14 @@ function timeAgo(iso) {
 }
 
 export default function Orders() {
-  const { markAllRead } = useOrderStore()
+  const { addNotification } = useOrderStore()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const intervalRef = useRef(null)
-  const prevCountRef = useRef(0)
+  const prevOrderIdsRef = useRef(new Set())
 
   // ── Fetch all orders from API ─────────────────
   const fetchOrders = useCallback(async (silent = false) => {
@@ -84,14 +102,15 @@ export default function Orders() {
         })),
       }))
 
-      // Notify if new orders came in
-      if (mapped.length > prevCountRef.current && prevCountRef.current > 0) {
-        const newCount = mapped.length - prevCountRef.current
+      // Detect genuinely new orders (not seen before this session)
+      const newOrders = mapped.filter(o => !prevOrderIdsRef.current.has(o.id))
+      if (newOrders.length > 0 && prevOrderIdsRef.current.size > 0) {
+        // Only alert after the initial load
+        const newCount = newOrders.length
         toast(`🛎️ ${newCount} new order${newCount > 1 ? 's' : ''}!`, {
           style: { fontWeight: 'bold', border: '2px solid #f97316', borderRadius: '12px' },
           duration: 5000,
         })
-        // Sound
         try {
           const ctx = new (window.AudioContext || window.webkitAudioContext)()
           const osc = ctx.createOscillator(); const gain = ctx.createGain()
@@ -100,17 +119,31 @@ export default function Orders() {
           gain.gain.setValueAtTime(0.4, ctx.currentTime)
           gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6)
           osc.start(); osc.stop(ctx.currentTime + 0.6)
-        } catch (_) { }
+        } catch (_) {}
+
+        // Push new orders into the notification store (bell badge)
+        newOrders.forEach(o => {
+          addNotification({
+            id: `notif-${o.id}-${Date.now()}`,
+            type: 'new_order',
+            title: '🛎️ New Order!',
+            message: `Table ${o.tableNumber} · ${Number(o.grandTotal || 0).toFixed(0)} ETB`,
+            orderId: o.id,
+            read: false,
+            createdAt: o.createdAt || new Date().toISOString(),
+          })
+        })
       }
-      prevCountRef.current = mapped.length
+
+      // Update the known set of order IDs
+      mapped.forEach(o => prevOrderIdsRef.current.add(o.id))
       setOrders(mapped)
-      markAllRead()
     } catch (err) {
       if (!silent) toast.error('Could not connect to API server')
     } finally {
       setLoading(false)
     }
-  }, [markAllRead])
+  }, [addNotification])
 
   // Fetch on mount + every 5 seconds
   useEffect(() => {
@@ -122,6 +155,12 @@ export default function Orders() {
   // Real-time: Socket.io for cross-device updates + localStorage for same-device
   useEffect(() => {
     const socket = io('/', { transports: ['websocket', 'polling'] })
+
+    socket.on('connect', () => {
+      const tenantId = getAdminTenantId()
+      if (tenantId) socket.emit('join_tenant', { tenantId })
+    })
+
     socket.on('new_order', () => fetchOrders(true))
     socket.on('order_status_updated', () => fetchOrders(true))
 
@@ -179,7 +218,7 @@ export default function Orders() {
         .total{font-weight:bold;font-size:14px} .footer{text-align:center;margin-top:16px;font-size:11px}
       </style></head>
       <body onload="window.print();window.close()">
-        <h2>ABC Restaurant</h2>
+        <h2>MEGA Digital Menu</h2>
         <p class="center" style="font-size:11px;margin:0">Bole Road, Addis Ababa</p>
         <p class="center" style="font-size:11px;margin:0">+251 91 859 2028</p>
         <div class="divider"></div>

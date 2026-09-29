@@ -25,7 +25,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const navigate = useNavigate()
-  const { notifications, unreadCount, markAllRead, markNotificationRead, clearNotifications } = useOrderStore()
+  const { notifications, unreadCount, markAllRead, markNotificationRead, clearNotifications, addNotification } = useOrderStore()
 
   // Listen for new orders from ALL devices via Socket.io (cross-device)
   // AND from same-device other tabs via localStorage
@@ -77,6 +77,18 @@ export default function NotificationBell() {
       const total      = (order.grand_total || order.grandTotal || 0).toFixed(0)
       const itemsCount = (order.items || []).length
       const customer   = order.customer_name || order.customerName || 'Guest'
+      const orderRef   = order.order_ref || order.id?.toString() || `ORD-${Date.now()}`
+
+      // Push into the persistent notification store so the bell badge updates
+      addNotification({
+        id: `notif-${orderRef}-${Date.now()}`,
+        type: 'new_order',
+        title: '🛎️ New Order!',
+        message: `Table ${tableNum} · ${total} ETB · ${itemsCount} item(s) · ${customer}`,
+        orderId: orderRef,
+        read: false,
+        createdAt: order.created_at || order.createdAt || new Date().toISOString(),
+      })
 
       toast.custom((t) => (
         <motion.div
