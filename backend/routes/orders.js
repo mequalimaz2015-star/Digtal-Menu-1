@@ -35,7 +35,7 @@ router.post('/', async (req, res) => {
     const {
       tableNumber, customerName, phone, notes, items, subtotal, vat, serviceCharge,
       grandTotal, estimatedTime, orderType, pickupTime, deliveryAddress, deliveryLat,
-      deliveryLng, deliveryFee, deliveryZoneId, paymentMethod,
+      deliveryLng, deliveryFee, deliveryZoneId, paymentMethod, sessionId,
     } = req.body
 
     if (!items || !items.length) return res.status(400).json({ error: 'Items required' })
@@ -65,9 +65,9 @@ router.post('/', async (req, res) => {
             tenant_id, order_ref, table_number, customer_name, phone, notes, subtotal,
             vat, service_charge, grand_total, estimated_time, order_type, pickup_number,
             pickup_time, delivery_address, delivery_lat, delivery_lng, delivery_fee,
-            delivery_zone_id, payment_method, payment_status, delivery_status
+            delivery_zone_id, payment_method, payment_status, delivery_status, session_id
           )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
           RETURNING *
         `, [
           req.tenantId,
@@ -92,6 +92,7 @@ router.post('/', async (req, res) => {
           paymentMethod || 'cash',
           'pending',
           resolvedType === 'delivery' ? 'pending' : 'pending',
+          sessionId || null,
         ])
         const order = orderResult.rows[0]
         const orderId = Number(order.id)  // cast BigInt → Number for MySQL
@@ -128,7 +129,9 @@ router.post('/', async (req, res) => {
 
         const io = req.app.get('io')
         if (io) {
-          io.emit('new_order', finalOrder)
+          // Notify the specific tenant room (admin/staff)
+          io.to(`tenant-${req.tenantId}`).emit('new_order', finalOrder)
+          // Backward-compat global emit so older clients still work
           io.emit(`tenant-${req.tenantId}-new-order`, finalOrder)
         }
 
@@ -294,9 +297,16 @@ router.put('/:id/status', requireAuth, requireTenantMatch, async (req, res) => {
           }
           const io = req.app.get('io')
           if (io) {
-            io.emit('order_status_updated', updatedOrder)
+            // Notify the customer's scoped room: customer-{tenantId}-{sessionId}
+            // The order stores session_id set at order creation time
+            const sessionId = updatedOrder.session_id
+            if (sessionId) {
+              io.to(`customer-${tid}-${sessionId}`).emit('order_status_updated', updatedOrder)
+            }
+            // Also emit on a named channel so clients can listen by order ref
+            io.to(`tenant-${tid}`).emit('order_status_updated', updatedOrder)
+            // Fallback: keep tenant-scoped channel for backward compat
             io.emit(`order-${updatedOrder.order_ref}`, updatedOrder)
-            io.emit(`tenant-${tid}-order-update`, updatedOrder)
           }
           return res.json(updatedOrder)
         }

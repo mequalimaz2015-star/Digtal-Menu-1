@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useEffect } from 'react'
 import useAppStore from './store/useAppStore'
 
@@ -48,6 +48,21 @@ import TenantRegistration from './pages/saas/TenantRegistration'
 import RiderDashboard from './pages/rider/RiderDashboard'
 import LandingPage from './pages/landing/LandingPage'
 
+/**
+ * CustomerShell — mounts OrderStatusMonitor + ChatWidget ONLY on customer-facing
+ * pages. This means the notification socket is NEVER opened on the landing page,
+ * admin panel, superadmin console, or any other non-customer route.
+ */
+function CustomerShell({ children }) {
+  return (
+    <>
+      <OrderStatusMonitor />
+      {children}
+      <ChatWidget />
+    </>
+  )
+}
+
 export default function App() {
   const { darkMode } = useAppStore()
 
@@ -64,11 +79,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      {/* Global order status monitor for customer notifications */}
-      <OrderStatusMonitor />
-      
       <Routes>
-        {/* Super Admin Console Routes */}
+        {/* ── Super Admin Console ─────────────────────────────────────────── */}
         <Route path="/superadmin/login" element={<SuperAdminLogin />} />
         <Route
           path="/superadmin"
@@ -79,56 +91,28 @@ export default function App() {
           }
         >
           <Route index element={<SADashboard />} />
-          <Route path="tenants" element={<SATenants />} />
-          <Route path="plans" element={<SAPlans />} />
-          <Route path="revenue" element={<SARevenue />} />
-          <Route path="users" element={<SAUsers />} />
-          <Route path="activity" element={<SAActivity />} />
+          <Route path="tenants"       element={<SATenants />} />
+          <Route path="plans"         element={<SAPlans />} />
+          <Route path="revenue"       element={<SARevenue />} />
+          <Route path="users"         element={<SAUsers />} />
+          <Route path="activity"      element={<SAActivity />} />
           <Route path="announcements" element={<SAAnnouncements />} />
-          <Route path="settings" element={<SASettings />} />
+          <Route path="settings"      element={<SASettings />} />
         </Route>
 
-        {/* Tenant Owner SaaS Registration */}
+        {/* ── SaaS Registration & Public Marketing ────────────────────────── */}
         <Route path="/register-tenant" element={<TenantRegistration />} />
-        <Route path="/saas" element={<TenantRegistration />} />
-
-        {/* Public Landing / Marketing Page */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/home" element={<LandingPage />} />
-        <Route path="/about" element={<LandingPage />} />
+        <Route path="/saas"            element={<TenantRegistration />} />
+        <Route path="/"       element={<LandingPage />} />
+        <Route path="/home"   element={<LandingPage />} />
+        <Route path="/about"  element={<LandingPage />} />
         <Route path="/contact" element={<LandingPage />} />
 
-        {/* Rider Portal Route */}
-        <Route path="/rider" element={<RiderDashboard />} />
-        <Route path="/menu" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/menu/:tableId" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/table/:tableId" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/t/:tableId" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/scan" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/cart" element={<><CartPage /><ChatWidget /></>} />
-        <Route path="/checkout" element={<CheckoutPage />} />
-        <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
-        <Route path="/profile" element={<><ProfilePage /><ChatWidget /></>} />
-        <Route path="/order-history" element={<><OrderHistoryPage /><ChatWidget /></>} />
-        <Route path="/categories" element={<><CategoriesPage /><ChatWidget /></>} />
-
-        {/* Path-Based Multi-Tenant Customer Routes (/r/:tenantSlug/...) */}
-        <Route path="/r/:tenantSlug" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/r/:tenantSlug/menu" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/r/:tenantSlug/menu/:tableId" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/r/:tenantSlug/t/:tableId" element={<><HomePage /><ChatWidget /></>} />
-        <Route path="/r/:tenantSlug/categories" element={<><CategoriesPage /><ChatWidget /></>} />
-        <Route path="/r/:tenantSlug/cart" element={<><CartPage /><ChatWidget /></>} />
-        <Route path="/r/:tenantSlug/checkout" element={<CheckoutPage />} />
-        <Route path="/r/:tenantSlug/order-confirmation/:orderId" element={<OrderConfirmation />} />
-        <Route path="/r/:tenantSlug/profile" element={<><ProfilePage /><ChatWidget /></>} />
-        <Route path="/r/:tenantSlug/order-history" element={<><OrderHistoryPage /><ChatWidget /></>} />
-
-
-        {/* Waiter Device Route */}
+        {/* ── Rider / Waiter portals (no customer notifications needed) ───── */}
+        <Route path="/rider"  element={<RiderDashboard />} />
         <Route path="/waiter" element={<WaiterPage />} />
 
-        {/* Restaurant Admin Routes */}
+        {/* ── Restaurant Admin ─────────────────────────────────────────────── */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
           path="/admin"
@@ -139,19 +123,45 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="categories" element={<Categories />} />
-          <Route path="menu-items" element={<MenuItems />} />
-          <Route path="modifiers" element={<ModifierGroups />} />
-          <Route path="tables" element={<Tables />} />
-          <Route path="qr-codes" element={<QRCodes />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="kitchen" element={<KitchenDisplay />} />
-          <Route path="reports"  element={<Reports />} />
-          <Route path="reviews"  element={<Reviews />} />
-          <Route path="chat"     element={<ChatPanel />} />
-          <Route path="users"    element={<Users />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="categories"  element={<Categories />} />
+          <Route path="menu-items"  element={<MenuItems />} />
+          <Route path="modifiers"   element={<ModifierGroups />} />
+          <Route path="tables"      element={<Tables />} />
+          <Route path="qr-codes"    element={<QRCodes />} />
+          <Route path="orders"      element={<Orders />} />
+          <Route path="kitchen"     element={<KitchenDisplay />} />
+          <Route path="reports"     element={<Reports />} />
+          <Route path="reviews"     element={<Reviews />} />
+          <Route path="chat"        element={<ChatPanel />} />
+          <Route path="users"       element={<Users />} />
+          <Route path="settings"    element={<Settings />} />
         </Route>
+
+        {/* ── Customer Pages — OrderStatusMonitor + ChatWidget only here ───── */}
+        {/* Legacy single-tenant routes */}
+        <Route path="/menu"                       element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/menu/:tableId"              element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/table/:tableId"             element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/t/:tableId"                 element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/scan"                       element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/cart"                       element={<CustomerShell><CartPage /></CustomerShell>} />
+        <Route path="/checkout"                   element={<CustomerShell><CheckoutPage /></CustomerShell>} />
+        <Route path="/order-confirmation/:orderId" element={<CustomerShell><OrderConfirmation /></CustomerShell>} />
+        <Route path="/profile"                    element={<CustomerShell><ProfilePage /></CustomerShell>} />
+        <Route path="/order-history"              element={<CustomerShell><OrderHistoryPage /></CustomerShell>} />
+        <Route path="/categories"                 element={<CustomerShell><CategoriesPage /></CustomerShell>} />
+
+        {/* Multi-tenant customer routes (/r/:tenantSlug/...) */}
+        <Route path="/r/:tenantSlug"                              element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/menu"                         element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/menu/:tableId"                element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/t/:tableId"                   element={<CustomerShell><HomePage /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/categories"                   element={<CustomerShell><CategoriesPage /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/cart"                         element={<CustomerShell><CartPage /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/checkout"                     element={<CustomerShell><CheckoutPage /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/order-confirmation/:orderId"  element={<CustomerShell><OrderConfirmation /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/profile"                      element={<CustomerShell><ProfilePage /></CustomerShell>} />
+        <Route path="/r/:tenantSlug/order-history"                element={<CustomerShell><OrderHistoryPage /></CustomerShell>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

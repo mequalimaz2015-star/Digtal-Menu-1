@@ -30,7 +30,18 @@ export const useOrderStore = create(
       // ── Customer places order → saved to SQL Server via API ──
       placeOrder: async (orderData) => {
         try {
-          const res = await client.post('/orders', orderData)
+          // Attach per-tab session ID so the backend can route real-time
+          // order_status_updated events only to this customer's socket room
+          const sessionId = (() => {
+            let sid = sessionStorage.getItem('customer_session_id')
+            if (!sid) {
+              sid = `cs-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+              sessionStorage.setItem('customer_session_id', sid)
+            }
+            return sid
+          })()
+
+          const res = await client.post('/orders', { ...orderData, sessionId })
           const savedOrder = res.data
 
           const localOrder = {

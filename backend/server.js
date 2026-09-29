@@ -96,6 +96,32 @@ app.set('io', io)
 
 io.on('connection', (socket) => {
   console.log('⚡ Client connected to socket:', socket.id)
+
+  // ── Room join: admin/restaurant staff joins their tenant room ─────────────
+  // Client sends: socket.emit('join_tenant', { tenantId: 3 })
+  socket.on('join_tenant', ({ tenantId } = {}) => {
+    if (!tenantId) return
+    socket.join(`tenant-${tenantId}`)
+    console.log(`🏠 Socket ${socket.id} joined tenant room: tenant-${tenantId}`)
+  })
+
+  // ── Room join: customer joins a room scoped to tenant + their session ID ──
+  // Client sends: socket.emit('join_customer', { tenantId: 3, sessionId: 'abc123' })
+  socket.on('join_customer', ({ tenantId, sessionId } = {}) => {
+    if (!tenantId || !sessionId) return
+    const room = `customer-${tenantId}-${sessionId}`
+    socket.join(room)
+    console.log(`👤 Socket ${socket.id} joined customer room: ${room}`)
+  })
+
+  // ── Room leave ─────────────────────────────────────────────────────────────
+  socket.on('leave_tenant', ({ tenantId } = {}) => {
+    if (tenantId) socket.leave(`tenant-${tenantId}`)
+  })
+
+  socket.on('disconnect', () => {
+    console.log('🔌 Socket disconnected:', socket.id)
+  })
 })
 
 const PORT = process.env.PORT || 3000

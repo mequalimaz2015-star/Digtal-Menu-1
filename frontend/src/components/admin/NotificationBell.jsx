@@ -30,8 +30,35 @@ export default function NotificationBell() {
   // Listen for new orders from ALL devices via Socket.io (cross-device)
   // AND from same-device other tabs via localStorage
   useEffect(() => {
-    // ── Socket.io: fires on ANY device when a customer places an order ──────
+    // Resolve the admin's numeric tenant ID from localStorage admin-user or token
+    const getAdminTenantId = () => {
+      try {
+        const user = JSON.parse(localStorage.getItem('admin-user') || '{}')
+        if (user.tenant_id) return user.tenant_id
+        // Fallback: decode from JWT
+        const token = localStorage.getItem('token')
+        if (token && token !== 'demo-admin-token') {
+          const parts = token.split('.')
+          if (parts.length === 3) {
+            const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+            const payload = JSON.parse(atob(padded + '=='.slice((padded.length % 4) || 4)))
+            return payload.tenant_id || null
+          }
+        }
+      } catch (_) {}
+      return null
+    }
+
+    // ── Socket.io: fires ONLY for this tenant's orders via room ──────────────
     const socket = io('/', { transports: ['websocket', 'polling'] })
+
+    socket.on('connect', () => {
+      const tenantId = getAdminTenantId()
+      if (tenantId) {
+        // Join tenant room so we only receive events for our own restaurant
+        socket.emit('join_tenant', { tenantId })
+      }
+    })
 
     const handleNewOrder = (order) => {
       // Play notification sound
@@ -78,8 +105,7 @@ export default function NotificationBell() {
     }
 
     socket.on('new_order', handleNewOrder)
-    // Also listen to tenant-scoped events if emitted
-    socket.on('tenant-new-order', handleNewOrder)
+    // tenant-scoped room means this `new_order` event already only arrives for our restaurant
 
     // ── localStorage: fires only in other same-device tabs ───────────────────
     const handleStorage = (e) => {

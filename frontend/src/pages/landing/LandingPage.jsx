@@ -84,7 +84,7 @@ export default function LandingPage() {
               <img
                 src="/mega-logo.png"
                 alt="MEGA Digital Menu"
-                className="h-12 w-auto object-contain"
+                className="h-12 w-12 rounded-full object-cover shadow-md ring-2 ring-amber-400/40"
               />
             </a>
 

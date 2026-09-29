@@ -136,6 +136,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(50) DEFAULT 
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'cash'; -- 'cash', 'chapa', 'telebirr'
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'pending'; -- 'pending', 'paid', 'failed'
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_tx_ref VARCHAR(100);
+-- session_id: unique per-browser-tab ID sent by the customer at checkout, used to route
+-- order_status_updated socket events ONLY to the customer who placed the order
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS session_id VARCHAR(100);
 
 -- REVIEWS TABLE
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE;
