@@ -5,7 +5,6 @@ const { query } = require('../db')
 const { requireAuth } = require('../middleware/auth')
 const local = require('../localStore')
 const { sendEmail, otpEmailHtml } = require('../emailService')
-
 // In-memory OTP store: email → { code, expiresAt, restaurantName }
 // (survives server restart for ~10 min window, no DB needed)
 const otpStore = new Map()
@@ -92,7 +91,14 @@ router.post('/login', async (req, res) => {
       }
     }
 
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' })
+    if (!user) {
+      local.logActivity({
+        action: 'login_failed', targetName: 'Failed Login Attempt',
+        targetType: 'auth', actorEmail: cleanEmail, actorRole: 'unknown',
+        tenantName: 'Platform', details: `No account found for ${cleanEmail}`,
+      })
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
 
     // Check credentials with bcrypt, and allow direct default fallback passwords
     let valid = false
@@ -104,12 +110,34 @@ router.post('/login', async (req, res) => {
       valid = await bcrypt.compare(password, user.password).catch(() => false)
     }
 
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
+    if (!valid) {
+      local.logActivity({
+        action:     'login_failed',
+        targetName: `Failed Login Attempt`,
+        targetType: 'auth',
+        actorEmail: cleanEmail,
+        actorRole:  'unknown',
+        tenantName: 'Platform',
+        details:    `Invalid password for ${cleanEmail}`,
+      })
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
 
     // If non-superadmin and tenant is suspended, deny login
     if (user.role !== 'super_admin' && user.tenant_status === 'suspended') {
       return res.status(403).json({ error: 'Your restaurant account is suspended. Please contact platform support.' })
     }
+
+    // Log successful login
+    local.logActivity({
+      action:     'login',
+      targetName: `${user.name || user.email} Login`,
+      targetType: 'auth',
+      actorEmail: user.email,
+      actorRole:  user.role,
+      tenantName: user.tenant_name || (user.role === 'super_admin' ? 'Platform' : 'Restaurant'),
+      details:    `Role: ${user.role}`,
+    })
 
     const token = jwt.sign(
       { 

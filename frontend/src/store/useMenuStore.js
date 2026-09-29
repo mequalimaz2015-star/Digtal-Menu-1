@@ -191,7 +191,6 @@ function makeStore(set, get) {
           calories:        i.calories || null,
           discount:        Number(i.discount) || 0,
           allergens:       i.allergens ? String(i.allergens).split(',').map(s => s.trim()).filter(Boolean) : [],
-          menuItemRef:     i.menu_item_ref || i.menuItemRef || '',
         })) : []
 
         const normMods = Array.isArray(mods) ? mods.map(g => ({
@@ -283,6 +282,7 @@ function makeStore(set, get) {
         allergens: Array.isArray(data.allergens) ? data.allergens.join(',') : data.allergens,
       })
       const i = res.data
+      const i = res.data
       set(s => ({
         menuItems: [...s.menuItems, {
           id: String(i.id), categoryId: String(i.category_id),
@@ -296,9 +296,9 @@ function makeStore(set, get) {
           rating: Number(i.rating) || 4.5, reviewCount: 0,
           calories: i.calories || null, discount: Number(i.discount) || 0,
           allergens: i.allergens ? String(i.allergens).split(',').map(s => s.trim()).filter(Boolean) : [],
+          menuItemRef: i.menu_item_ref || i.menuItemRef || '',
         }]
       }))
-    },
 
     updateMenuItem: async (id, data) => {
       set(s => ({ menuItems: s.menuItems.map(i => i.id === id ? { ...i, ...data } : i) }))

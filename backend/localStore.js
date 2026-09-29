@@ -566,6 +566,26 @@ function getMenuItemById(id, tenantId) {
 function createMenuItem(tenantId, itemData) {
   const data = load()
   const maxId = data.menuItems.reduce((m, i) => Math.max(m, i.id || 0), 0)
+
+  // Generate menu_item_ref like "YI-001" from tenant name
+  const tenant = data.tenants.find(t => t.id === Number(tenantId))
+  const tenantName = tenant ? tenant.name : 'MENU'
+  const prefix = tenantName
+    .split(/\s+/)
+    .map(w => w.charAt(0).toUpperCase())
+    .join('')
+    .slice(0, 3)
+    .replace(/[^A-Z]/g, 'M') || 'M'
+
+  // Find highest existing ref for this tenant+prefix
+  const tenantItems = data.menuItems.filter(i => i.tenant_id === Number(tenantId))
+  const lastRef = tenantItems
+    .map(i => i.menu_item_ref || '')
+    .filter(r => r.startsWith(prefix + '-'))
+    .map(r => parseInt(r.split('-').pop()) || 0)
+    .reduce((max, n) => Math.max(max, n), 0)
+  const menu_item_ref = `${prefix}-${String(lastRef + 1).padStart(3, '0')}`
+
   const newItem = {
     id: maxId + 1,
     tenant_id: Number(tenantId),
@@ -589,6 +609,7 @@ function createMenuItem(tenantId, itemData) {
     calories: itemData.calories ? parseInt(itemData.calories) : null,
     discount: parseFloat(itemData.discount) || 0,
     allergens: Array.isArray(itemData.allergens) ? itemData.allergens.join(',') : (itemData.allergens || ''),
+    menu_item_ref,
     created_at: new Date().toISOString()
   }
   data.menuItems.push(newItem)
@@ -886,6 +907,29 @@ function getRiderOrders(riderId) {
 }
 
 // Seed backward compatibility aliases
+// ── ACTIVITY LOG (in-memory, survives for server session) ─────────────────────
+// Keeps the last 500 events. Written to on every login attempt and admin action.
+const _activityLog = []
+
+function logActivity({ action, targetName, targetType, actorEmail, actorRole, tenantName, details }) {
+  _activityLog.unshift({
+    id:          Date.now() + Math.random(),
+    action:      action      || 'unknown',
+    target_name: targetName  || '',
+    target_type: targetType  || 'system',
+    actor_email: actorEmail  || 'unknown',
+    actor_role:  actorRole   || 'unknown',
+    tenant_name: tenantName  || 'Platform',
+    details:     details     || '',
+    created_at:  new Date().toISOString(),
+  })
+  if (_activityLog.length > 500) _activityLog.length = 500
+}
+
+function getActivityLog(limit = 100) {
+  return _activityLog.slice(0, limit)
+}
+
 function getSeedCategories(tenantId) {
   return getCategories(tenantId)
 }
@@ -957,4 +1001,7 @@ module.exports = {
   getSeedMenuItems,
   getSeedModifiers,
   getSeedTables,
+  // Activity Log
+  logActivity,
+  getActivityLog,
 }

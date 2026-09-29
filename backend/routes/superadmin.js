@@ -240,6 +240,20 @@ router.get('/plans', async (req, res) => {
 // GET /api/superadmin/users - All registered users across all tenants
 router.get('/users', async (req, res) => {
   try {
+    // Always load localStore users as the base (captures everyone who registered while DB was down)
+    const data = local.load()
+    const localUsers = (data.users || []).map(u => {
+      const tenant = (data.tenants || []).find(t => t.id === u.tenant_id)
+      return {
+        ...u,
+        tenant_name: tenant ? tenant.name : (u.role === 'super_admin' ? 'Platform' : 'N/A'),
+        tenant_slug: tenant ? tenant.slug : null,
+        _source: 'local',
+      }
+    })
+
+    // Try DB — merge in any DB users not already in localStore
+    let dbUsers = []
     try {
       const result = await query(`
         SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at, u.tenant_id,
@@ -248,21 +262,19 @@ router.get('/users', async (req, res) => {
         LEFT JOIN tenants t ON u.tenant_id = t.id
         ORDER BY u.created_at DESC
       `)
-      if (result.rows.length > 0) return res.json(result.rows)
+      dbUsers = (result.rows || []).map(u => ({ ...u, _source: 'db' }))
     } catch (dbErr) {
-      console.warn('DB users query failed, returning fallback users:', dbErr.message)
+      console.warn('DB users query failed, using localStore only:', dbErr.message)
     }
 
-    const data = local.load()
-    const users = (data.users || []).map(u => {
-      const tenant = (data.tenants || []).find(t => t.id === u.tenant_id)
-      return {
-        ...u,
-        tenant_name: tenant ? tenant.name : (u.role === 'super_admin' ? 'Platform Engine' : 'N/A'),
-        tenant_slug: tenant ? tenant.slug : null
-      }
-    })
-    res.json(users)
+    // Merge: DB is authoritative, but include localStore users not found in DB by email
+    const dbEmails = new Set(dbUsers.map(u => (u.email || '').toLowerCase()))
+    const localOnly = localUsers.filter(u => !dbEmails.has((u.email || '').toLowerCase()))
+    const merged = [...dbUsers, ...localOnly]
+      .map(({ _source, ...u }) => u)  // strip internal _source field
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+
+    res.json(merged)
   } catch (err) {
     console.error('Superadmin get users error:', err)
     res.status(500).json({ error: 'Failed to fetch users' })
@@ -364,6 +376,7 @@ router.delete('/plans/:id', async (req, res) => {
 // GET /api/superadmin/audit-logs - Platform activity logs
 router.get('/audit-logs', async (req, res) => {
   try {
+    // Try DB first
     try {
       const result = await query(`
         SELECT a.*, u.email as actor_email, t.name as tenant_name
@@ -371,14 +384,18 @@ router.get('/audit-logs', async (req, res) => {
         LEFT JOIN users u ON a.user_id = u.id
         LEFT JOIN tenants t ON a.tenant_id = t.id
         ORDER BY a.created_at DESC
-        LIMIT 50
+        LIMIT 100
       `)
       if (result.rows.length > 0) return res.json(result.rows)
     } catch (_) {}
 
+    // Return in-memory activity log (populated by real login events)
+    const memLog = local.getActivityLog(100)
+    if (memLog.length > 0) return res.json(memLog)
+
+    // Absolute fallback if no activity yet
     res.json([
-      { id: 1, action: 'system_init', target_type: 'platform', target_name: 'Platform Engine', actor_email: 'superadmin@platform.com', created_at: new Date().toISOString() },
-      { id: 2, action: 'login', target_type: 'auth', target_name: 'Super Admin Login', actor_email: 'superadmin@platform.com', created_at: new Date(Date.now() - 3600000).toISOString() }
+      { id: 1, action: 'system_init', target_type: 'platform', target_name: 'Platform Engine', actor_email: 'superadmin@platform.com', actor_role: 'super_admin', tenant_name: 'Platform', created_at: new Date().toISOString() },
     ])
   } catch (err) {
     res.status(500).json({ error: err.message })
