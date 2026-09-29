@@ -120,6 +120,12 @@ router.get('/sessions', requireAuth, (req, res) => {
   res.json(list)
 })
 
+// ── GET /api/platform-chat/count ─────────────────────────────────────────────
+// PUBLIC — returns how many sessions exist. Useful for debugging without auth.
+router.get('/count', (req, res) => {
+  res.json({ count: platformSessions.size, sessionIds: Array.from(platformSessions.keys()) })
+})
+
 // ── POST /api/platform-chat/:sessionId/reply ──────────────────────────────────
 // Superadmin replies to a visitor
 router.post('/:sessionId/reply', requireAuth, (req, res) => {
