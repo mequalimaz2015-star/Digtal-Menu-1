@@ -134,12 +134,25 @@ async function query(text, values = []) {
       if (upd) {
         const { sql, values: vals } = toMySQL(upd[1], values)
         await mysqlPool.query(sql, vals)
-        // Re-fetch using the WHERE clause
+
+        // Re-fetch the updated row: find WHERE clause $N placeholders and
+        // map them to the correct original values[] indices (1-based $N → values[N-1])
         const whereStart = upd[1].toUpperCase().lastIndexOf('WHERE')
-        const whereClause = upd[1].slice(whereStart + 6)
-        const { sql: wSql, values: wVals } = toMySQL(whereClause, values)
+        const whereClause = upd[1].slice(whereStart + 6).trim()
+
+        // Extract all $N indices referenced in the WHERE clause
+        const whereIndices = []
+        whereClause.replace(/\$([0-9]+)/g, (_, n) => { whereIndices.push(parseInt(n, 10)) })
+
+        // Build the WHERE SQL with ? placeholders and correct values
+        const whereSql = whereClause.replace(/\$([0-9]+)/g, '?')
+        const whereVals = whereIndices.map(n => values[n - 1] ?? null)
+
         try {
-          const [rows] = await mysqlPool.query(`SELECT ${upd[3]} FROM \`${upd[2].replace(/`/g,'')}\` WHERE ${wSql}`, wVals)
+          const [rows] = await mysqlPool.query(
+            `SELECT ${upd[3] === '*' ? '*' : upd[3]} FROM \`${upd[2].replace(/`/g, '')}\` WHERE ${whereSql}`,
+            whereVals
+          )
           return { rows, recordset: rows, rowCount: rows.length }
         } catch (_) {
           return { rows: [], recordset: [], rowCount: 1 }

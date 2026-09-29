@@ -212,6 +212,7 @@ async function initMySqlSchema(pool) {
       payment_method VARCHAR(50) DEFAULT 'cash',
       payment_status VARCHAR(50) DEFAULT 'pending',
       payment_tx_ref VARCHAR(100),
+      session_id VARCHAR(100) NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
@@ -292,6 +293,23 @@ async function initMySqlSchema(pool) {
       await pool.query(sql)
     } catch (e) {
       console.warn('Notice creating MySQL table:', e.message)
+    }
+  }
+
+  // ── Live column migrations (idempotent — safe to run on every boot) ────────
+  const columnMigrations = [
+    // session_id was missing from the original orders DDL — add it if absent
+    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS session_id VARCHAR(100) NULL`,
+  ]
+  for (const sql of columnMigrations) {
+    try {
+      await pool.query(sql)
+    } catch (e) {
+      // Older MySQL versions don't support IF NOT EXISTS on ALTER TABLE;
+      // silently ignore "Duplicate column" errors
+      if (!e.message.toLowerCase().includes('duplicate column')) {
+        console.warn('Notice running column migration:', e.message)
+      }
     }
   }
 }
