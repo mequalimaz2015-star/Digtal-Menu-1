@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { io } from 'socket.io-client'
@@ -259,11 +259,66 @@ function SupportChatWidget() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Left panel feature callouts (from the mockup image) ──────────────────────
+const LEFT_FEATURES = [
+  { icon: '⚡', title: 'Quick & Easy Access',   desc: 'Scan the QR code and explore the menu instantly.' },
+  { icon: '📱', title: 'Order Directly',         desc: 'Choose your favorite items and place your order.' },
+  { icon: '🌿', title: 'Fresh & Delicious',      desc: 'Enjoy quality food and refreshing drinks.' },
+  { icon: '❤️', title: 'Better Experience',      desc: 'Modern, simple and user-friendly.' },
+]
+
+// ── Hidden "About Digital Menu" animated overlay ──────────────────────────────
+const ABOUT_STATS = [
+  { val: '500+',    label: 'Restaurants',     icon: '🏪' },
+  { val: '50,000+', label: 'Orders/Month',    icon: '🛒' },
+  { val: '4.9★',    label: 'Avg Rating',      icon: '⭐' },
+  { val: '3 min',   label: 'Setup Time',      icon: '⚡' },
+]
+
+const ABOUT_FEATURES_HIDDEN = [
+  { icon: '🤖', title: 'AI-Powered Import',    desc: 'Upload a photo of your paper menu — our AI reads and creates your digital menu automatically.' },
+  { icon: '🔄', title: 'Real-Time Sync',        desc: 'Menu updates appear for customers the instant you save. No refresh, no delay.' },
+  { icon: '🌍', title: 'Multi-Language',        desc: 'Full English and Amharic support. Your menu speaks your customers\' language.' },
+  { icon: '📊', title: 'Smart Analytics',       desc: 'See your top dishes, peak hours, and revenue trends at a glance.' },
+  { icon: '🎯', title: 'Table-Level QR',        desc: 'Each table gets its own unique QR code. Orders route directly to the right ticket.' },
+  { icon: '🚀', title: 'Instant Onboarding',    desc: 'From sign-up to live digital menu in under 3 minutes. No technical skills needed.' },
+]
+
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
   const [contactSent, setContactSent] = useState(false)
   const [contactSending, setContactSending] = useState(false)
+  const [hiddenOpen, setHiddenOpen] = useState(false)
+  const [logoClickCount, setLogoClickCount] = useState(0)
+  const logoClickTimer = useRef(null)
+
+  // Secret trigger: click the logo 5 times quickly, OR press Ctrl+Shift+D
+  const handleLogoClick = useCallback(() => {
+    setLogoClickCount(n => {
+      const next = n + 1
+      if (next >= 5) {
+        setHiddenOpen(true)
+        clearTimeout(logoClickTimer.current)
+        return 0
+      }
+      clearTimeout(logoClickTimer.current)
+      logoClickTimer.current = setTimeout(() => setLogoClickCount(0), 2000)
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault()
+        setHiddenOpen(o => !o)
+      }
+      if (e.key === 'Escape') setHiddenOpen(false)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // Wire contact form to the real platform-chat API so superadmin sees it
   const handleContact = async (e) => {
@@ -295,7 +350,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <a href="#home" className="flex items-center">
+            <a href="#home" onClick={handleLogoClick} className="flex items-center select-none" title={logoClickCount > 0 ? `${5 - logoClickCount} more…` : undefined}>
               <img
                 src="/mega-logo.png"
                 alt="MEGA Digital Menu"
@@ -352,83 +407,498 @@ export default function LandingPage() {
       </header>
 
       {/* ── HERO ── */}
-      <section id="home" className="relative pt-24 pb-20 lg:pt-36 lg:pb-32 overflow-hidden">
+      <section id="home" className="relative pt-24 pb-16 lg:pt-32 lg:pb-24 overflow-hidden">
         {/* Background glow */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-amber-500/8 rounded-full blur-3xl" />
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-amber-500/8 rounded-full blur-3xl" />
           <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] bg-orange-600/6 rounded-full blur-3xl" />
+          <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-amber-400/5 rounded-full blur-3xl" />
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="text-center max-w-4xl mx-auto">
-            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-bold uppercase tracking-widest mb-6">
-                🚀 Ethiopia's #1 Digital Menu Platform
-              </span>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight mb-6">
-                Take Your Restaurant<br />
-                <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-                  Fully Digital
-                </span>
-              </h1>
-              <p className="text-lg text-slate-400 leading-relaxed mb-10 max-w-2xl mx-auto">
-                MEGA Digital Menu gives your restaurant a beautiful QR-based digital menu, real-time order management, kitchen display, and delivery — all in one platform. Set up in minutes.
-              </p>
 
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link to="/register-tenant"
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-base rounded-2xl shadow-2xl shadow-amber-500/30 transition-all transform hover:scale-105">
-                  <img src="/mega-logo.png" alt="" className="h-5 w-auto object-contain" aria-hidden="true" /> Start Free 14-Day Trial
-                </Link>
-                <a href="#features"
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 border border-slate-700 hover:border-slate-500 text-white font-semibold text-base rounded-2xl transition-all hover:bg-slate-800">
-                  See How It Works ↓
-                </a>
+          {/* ── 3-column hero grid (visible lg+) ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_220px] xl:grid-cols-[260px_1fr_260px] gap-8 items-center">
+
+            {/* ── LEFT PANEL — feature callouts ── */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.7, delay: 0.4 }}
+              className="hidden lg:flex flex-col gap-5"
+            >
+              {LEFT_FEATURES.map((f, i) => (
+                <motion.div
+                  key={f.title}
+                  initial={{ opacity: 0, x: -30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.5 + i * 0.1 }}
+                  className="flex items-start gap-3 group"
+                >
+                  {/* Icon circle */}
+                  <div className="flex-shrink-0 w-10 h-10 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center text-lg group-hover:bg-amber-500/20 transition-colors">
+                    {f.icon}
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-sm leading-tight">{f.title}</p>
+                    <p className="text-slate-400 text-xs leading-relaxed mt-0.5">{f.desc}</p>
+                    {/* Divider line */}
+                    <div className="w-10 h-px bg-amber-500/30 mt-2" />
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+
+            {/* ── CENTER — headline + CTAs ── */}
+            <div className="text-center">
+              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+                <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-bold uppercase tracking-widest mb-6">
+                  🚀 Ethiopia's #1 Digital Menu Platform
+                </span>
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight mb-6">
+                  Take Your Restaurant<br />
+                  <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
+                    Fully Digital
+                  </span>
+                </h1>
+                <p className="text-lg text-slate-400 leading-relaxed mb-10 max-w-2xl mx-auto">
+                  MEGA Digital Menu gives your restaurant a beautiful QR-based digital menu, real-time order management, kitchen display, and delivery — all in one platform. Set up in minutes.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <Link to="/register-tenant"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-base rounded-2xl shadow-2xl shadow-amber-500/30 transition-all transform hover:scale-105">
+                    <img src="/mega-logo.png" alt="" className="h-5 w-auto object-contain" aria-hidden="true" /> Start Free 14-Day Trial
+                  </Link>
+                  <a href="#features"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 border border-slate-700 hover:border-slate-500 text-white font-semibold text-base rounded-2xl transition-all hover:bg-slate-800">
+                    See How It Works ↓
+                  </a>
+                </div>
+
+                <p className="text-xs text-slate-500 mt-4">No credit card required · Free trial · Cancel anytime</p>
+              </motion.div>
+            </div>
+
+            {/* ── RIGHT PANEL — QR stand + "Perfect View on Mobile" ── */}
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.7, delay: 0.4 }}
+              className="hidden lg:flex flex-col items-center gap-5"
+            >
+              {/* QR stand card */}
+              <div className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-5 flex flex-col items-center gap-3 shadow-xl shadow-black/40">
+                <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center">
+                  <span className="text-slate-950 text-lg font-black">🍴</span>
+                </div>
+                <p className="text-white font-black text-sm text-center leading-tight">MEGA<br/>Digital Menu</p>
+                {/* QR placeholder grid */}
+                <div className="w-20 h-20 bg-white rounded-lg p-1.5 grid grid-cols-7 gap-px">
+                  {Array.from({ length: 49 }).map((_, i) => {
+                    const pattern = [0,1,2,3,4,5,6,7,13,14,20,21,27,28,34,35,41,42,43,44,45,46,47,48,8,15,22,18,25,10,17,24,31,38,32,37,11,16,23,30,33,39,19,26,12,29,36,40,9]
+                    return <div key={i} className={`rounded-sm ${pattern.includes(i) ? 'bg-slate-950' : 'bg-white'}`} />
+                  })}
+                </div>
+                <p className="text-slate-400 text-xs font-semibold">Scan for Digital Menu</p>
               </div>
 
-              <p className="text-xs text-slate-500 mt-4">No credit card required · Free trial · Cancel anytime</p>
+              {/* "Perfect View on Mobile" badge */}
+              <div className="w-full bg-gradient-to-br from-amber-500/10 to-orange-600/10 border border-amber-500/25 rounded-2xl p-4 text-center">
+                <div className="text-2xl mb-2">📱</div>
+                <p className="text-amber-400 font-black text-sm">Perfect View</p>
+                <p className="text-amber-300/70 text-xs">on Mobile</p>
+                <div className="flex justify-center gap-1 mt-2">
+                  {[...Array(5)].map((_, i) => <span key={i} className="text-amber-400 text-xs">★</span>)}
+                </div>
+              </div>
+
+              {/* Good Food Great Vibes */}
+              <div className="w-full bg-amber-500 rounded-2xl px-4 py-3 text-center rotate-[-1deg] shadow-lg shadow-amber-500/30">
+                <p className="text-slate-950 font-black text-sm leading-tight">Good Food<br/>Great Vibes</p>
+              </div>
             </motion.div>
           </div>
 
-          {/* Hero mockup */}
-          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.3 }}
-            className="mt-16 max-w-5xl mx-auto">
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-2 shadow-2xl shadow-black/50">
-              <div className="bg-slate-800 rounded-2xl p-4 sm:p-6">
-                {/* Fake browser chrome */}
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="flex gap-1.5"><div className="w-3 h-3 rounded-full bg-red-500"/><div className="w-3 h-3 rounded-full bg-yellow-500"/><div className="w-3 h-3 rounded-full bg-green-500"/></div>
-                  <div className="flex-1 bg-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-400 font-mono">digital-menu.app.aletcloud.com/r/your-restaurant</div>
-                </div>
-                {/* Dashboard preview */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                  {[['💰','Today Revenue','4,850 ETB'],['🛒','Active Orders','7'],['🪑','Occupied Tables','5/8'],['✅','Served Today','23']].map(([icon,label,val])=>(
-                    <div key={label} className="bg-slate-900 rounded-xl p-3 border border-slate-700">
-                      <div className="text-xl mb-1">{icon}</div>
-                      <div className="text-xs text-slate-400">{label}</div>
-                      <div className="text-sm font-black text-white">{val}</div>
+          {/* ── iPhone mockup image — full width below the 3-col grid (desktop) ── */}
+          {/* On mobile it shows below the CTAs as a standalone card */}
+          <motion.div
+            initial={{ opacity: 0, y: 60 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, delay: 0.6 }}
+            className="mt-12 lg:mt-10"
+          >
+            {/* Desktop: side-by-side left-features | phone image | right-features already handled above.
+                Here we show a wide app showcase strip with the phone image centered. */}
+            <div className="relative max-w-4xl mx-auto">
+              {/* Glow ring behind phone */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-64 h-64 bg-amber-500/15 rounded-full blur-3xl" />
+              </div>
+
+              <div className="flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-0">
+                {/* Left feature strip — visible only on mobile (lg shows the sidebar column above) */}
+                <div className="lg:hidden grid grid-cols-2 gap-3 w-full">
+                  {LEFT_FEATURES.map(f => (
+                    <div key={f.title} className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-start gap-2">
+                      <span className="text-xl flex-shrink-0">{f.icon}</span>
+                      <div>
+                        <p className="text-white font-bold text-xs">{f.title}</p>
+                        <p className="text-slate-400 text-[10px] leading-relaxed">{f.desc}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div className="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-white">🔴 Live Orders</span>
-                    <span className="text-xs text-green-400 font-semibold">● Live</span>
+
+                {/* ── iPhone mockup image ── */}
+                <div className="relative flex-shrink-0">
+                  {/* AI Power badge */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 1.1 }}
+                    className="absolute -top-4 left-1/2 -translate-x-1/2 z-10 bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-1.5 rounded-full shadow-lg shadow-purple-500/40 flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <span className="text-sm">🤖</span>
+                    <span className="text-white text-xs font-black uppercase tracking-wide">AI Powered</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  </motion.div>
+
+                  {/* The actual image */}
+                  <img
+                    src="/mega-logo.png"
+                    alt="MEGA Digital Menu iPhone App Preview"
+                    className="hidden"
+                    aria-hidden="true"
+                  />
+                  {/* Stylised iPhone frame with app UI inside */}
+                  <div className="relative w-[220px] sm:w-[240px] mx-auto">
+                    {/* Phone outer shell */}
+                    <div className="bg-slate-950 border-[8px] border-slate-700 rounded-[42px] shadow-2xl shadow-black/70 overflow-hidden">
+                      {/* Notch */}
+                      <div className="relative bg-slate-950 h-7 flex items-center justify-center">
+                        <div className="w-20 h-5 bg-slate-900 rounded-full flex items-center justify-center gap-1">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+                          <div className="w-8 h-3 rounded-full bg-slate-800" />
+                        </div>
+                        {/* Status bar */}
+                        <div className="absolute right-3 top-1 flex items-center gap-0.5">
+                          <span className="text-white text-[8px] font-bold">9:41</span>
+                        </div>
+                      </div>
+
+                      {/* App screen */}
+                      <div className="bg-white" style={{ minHeight: '420px' }}>
+                        {/* App header */}
+                        <div className="bg-slate-950 px-3 py-2 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-amber-500 rounded-lg flex items-center justify-center">
+                              <span className="text-slate-950 text-[10px] font-black">🍴</span>
+                            </div>
+                            <div>
+                              <p className="text-white text-[10px] font-black leading-none">MEGA</p>
+                              <p className="text-slate-400 text-[8px] leading-none">Digital Menu</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-400 text-[9px] border border-slate-700 px-1.5 py-0.5 rounded-full">EN ▾</span>
+                            <div className="relative">
+                              <span className="text-slate-300 text-sm">🛒</span>
+                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 text-slate-950 text-[7px] font-black rounded-full flex items-center justify-center">2</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Hero banner */}
+                        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-3 pt-3 pb-2">
+                          <p className="text-slate-300 text-[9px]">Welcome to</p>
+                          <p className="text-white text-sm font-black leading-tight">MEGA</p>
+                          <p className="text-amber-400 text-[11px] font-black">Digital Menu</p>
+                          <p className="text-slate-400 text-[8px] mt-0.5">Scan • Browse • Order</p>
+                          <div className="flex gap-1 mt-1.5 mb-2">
+                            <div className="w-3 h-1 bg-amber-400 rounded-full" />
+                            <div className="w-1.5 h-1 bg-slate-600 rounded-full" />
+                            <div className="w-1.5 h-1 bg-slate-600 rounded-full" />
+                            <div className="w-1.5 h-1 bg-slate-600 rounded-full" />
+                          </div>
+                        </div>
+
+                        {/* Search */}
+                        <div className="px-3 py-2 bg-white">
+                          <div className="flex items-center gap-2 bg-slate-100 rounded-full px-3 py-1.5">
+                            <span className="text-slate-400 text-[10px]">🔍</span>
+                            <span className="text-slate-400 text-[9px]">Search for food, drinks or category...</span>
+                          </div>
+                        </div>
+
+                        {/* Category tabs */}
+                        <div className="px-3 pb-2 bg-white flex gap-2 overflow-hidden">
+                          {[['🔲','All'],['🍽️','Main'],['🥗','App.'],['🥤','Drinks'],['🍰','Des.']].map(([ic, lb], idx) => (
+                            <div key={lb} className={`flex flex-col items-center gap-0.5 flex-shrink-0 ${idx === 0 ? '' : ''}`}>
+                              <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-sm ${idx === 0 ? 'bg-amber-500' : 'bg-slate-100'}`}>
+                                {ic}
+                              </div>
+                              <span className={`text-[7px] ${idx === 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}`}>{lb}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Popular dishes */}
+                        <div className="px-3 bg-white">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-slate-900 text-[10px] font-black">Popular Dishes</span>
+                            <span className="text-amber-500 text-[8px] font-semibold">View All →</span>
+                          </div>
+                          {[
+                            { name: 'Grilled Chicken', desc: 'Tender grilled chicken with fresh salad.', price: 'ETB 180' },
+                            { name: 'Pasta Alfredo',   desc: 'Creamy sauce with mushrooms.', price: 'ETB 160' },
+                            { name: 'Beef Burger',     desc: 'Juicy beef with lettuce & cheese.', price: 'ETB 150' },
+                          ].map(item => (
+                            <div key={item.name} className="flex items-center gap-2 py-1.5 border-b border-slate-100 last:border-0">
+                              <div className="w-9 h-9 bg-gradient-to-br from-amber-200 to-orange-200 rounded-lg flex-shrink-0 flex items-center justify-center text-base">
+                                {item.name.includes('Chicken') ? '🍗' : item.name.includes('Pasta') ? '🍝' : '🍔'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-slate-900 text-[9px] font-bold truncate">{item.name}</p>
+                                <p className="text-slate-400 text-[8px] truncate">{item.desc}</p>
+                                <p className="text-amber-600 text-[9px] font-black mt-0.5">{item.price}</p>
+                              </div>
+                              <div className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center text-slate-950 text-sm flex-shrink-0">+</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Bottom nav */}
+                        <div className="bg-white border-t border-slate-100 px-2 py-1.5 flex justify-around">
+                          {[['🏠','Home'],['🍴','Menu'],['🛒','Order'],['📅','Res.'],['⋯','More']].map(([ic, lb], idx) => (
+                            <div key={lb} className="flex flex-col items-center gap-0.5">
+                              <span className={`text-sm ${idx === 0 ? 'text-amber-500' : 'text-slate-400'}`}>{ic}</span>
+                              <span className={`text-[7px] ${idx === 0 ? 'text-amber-500 font-bold' : 'text-slate-400'}`}>{lb}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Side button details */}
+                    <div className="absolute right-[-12px] top-[60px] w-1.5 h-8 bg-slate-600 rounded-r-lg" />
+                    <div className="absolute left-[-12px] top-[50px] w-1.5 h-6 bg-slate-600 rounded-l-lg" />
+                    <div className="absolute left-[-12px] top-[66px] w-1.5 h-10 bg-slate-600 rounded-l-lg" />
+                    <div className="absolute left-[-12px] top-[84px] w-1.5 h-10 bg-slate-600 rounded-l-lg" />
                   </div>
-                  {[['ORD-4821','T3','Margherita Pizza × 1','preparing'],['ORD-4820','T7','Lamb Tibs × 2, Coffee × 2','ready'],['ORD-4819','T1','Buffalo Wings × 1','new']].map(([id,t,items,status])=>(
-                    <div key={id} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0 text-xs">
-                      <span className="font-bold text-slate-300">#{id.slice(-4)}</span>
-                      <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">{t}</span>
-                      <span className="text-slate-400 flex-1 mx-3 truncate">{items}</span>
-                      <span className={`px-2 py-0.5 rounded-full font-semibold capitalize ${status==='preparing'?'bg-yellow-500/20 text-yellow-400':status==='ready'?'bg-green-500/20 text-green-400':'bg-blue-500/20 text-blue-400'}`}>{status}</span>
-                    </div>
-                  ))}
+                </div>
+
+                {/* Mobile-only QR + vibe cards */}
+                <div className="lg:hidden flex gap-3 w-full">
+                  <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-3 text-center">
+                    <div className="text-2xl mb-1">📱</div>
+                    <p className="text-amber-400 font-black text-xs">Perfect View on Mobile</p>
+                  </div>
+                  <div className="flex-1 bg-amber-500 rounded-xl p-3 text-center">
+                    <p className="text-slate-950 font-black text-xs leading-tight">Good Food<br/>Great Vibes</p>
+                  </div>
                 </div>
               </div>
             </div>
           </motion.div>
         </div>
       </section>
+
+      {/* ── HIDDEN: About Digital Menu Animated Section ── */}
+      {/* Triggered by clicking the logo 5x quickly, or pressing Ctrl+Shift+D */}
+      <AnimatePresence>
+        {hiddenOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-label="About Digital Menu"
+          >
+            {/* Close button */}
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+              onClick={() => setHiddenOpen(false)}
+              className="fixed top-5 right-5 z-10 w-11 h-11 bg-slate-800 border border-slate-700 hover:bg-slate-700 rounded-full flex items-center justify-center text-slate-300 hover:text-white transition-colors text-lg shadow-xl"
+              aria-label="Close"
+            >
+              ✕
+            </motion.button>
+
+            <div className="max-w-5xl mx-auto px-4 py-16 sm:py-20">
+
+              {/* Animated heading */}
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+                className="text-center mb-14"
+              >
+                {/* Glowing logo */}
+                <motion.div
+                  animate={{ scale: [1, 1.06, 1], rotate: [0, 3, -3, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  className="inline-block mb-6"
+                >
+                  <div className="relative w-24 h-24 mx-auto">
+                    <div className="absolute inset-0 bg-amber-500/30 rounded-full blur-2xl animate-pulse" />
+                    <img src="/mega-logo.png" alt="MEGA" className="relative w-24 h-24 rounded-full object-cover ring-4 ring-amber-500/50 shadow-2xl shadow-amber-500/30" />
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-bold uppercase tracking-widest mb-4">
+                    ✨ Hidden Mode — About Digital Menu
+                  </span>
+                  <h2 className="text-4xl sm:text-5xl font-black text-white mb-4">
+                    The Story Behind
+                    <span className="block bg-gradient-to-r from-amber-400 via-orange-400 to-red-400 bg-clip-text text-transparent">
+                      MEGA Digital Menu
+                    </span>
+                  </h2>
+                  <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed">
+                    We didn't just build a menu app — we built a revolution for Ethiopian hospitality. Here's what makes MEGA different.
+                  </p>
+                </motion.div>
+              </motion.div>
+
+              {/* Animated stat counters */}
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.35 }}
+                className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-14"
+              >
+                {ABOUT_STATS.map((s, i) => (
+                  <motion.div
+                    key={s.label}
+                    initial={{ opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 0.4 + i * 0.1 }}
+                    whileHover={{ y: -4, scale: 1.03 }}
+                    className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 hover:border-amber-500/50 rounded-2xl p-6 text-center transition-all"
+                  >
+                    <div className="text-3xl mb-2">{s.icon}</div>
+                    <div className="text-2xl font-black text-amber-400 mb-1">{s.val}</div>
+                    <div className="text-xs text-slate-400 font-medium">{s.label}</div>
+                  </motion.div>
+                ))}
+              </motion.div>
+
+              {/* Animated feature grid */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="mb-14"
+              >
+                <h3 className="text-center text-xl font-black text-white mb-8">
+                  What Powers MEGA
+                  <span className="ml-2 text-amber-400">⚙️</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {ABOUT_FEATURES_HIDDEN.map((f, i) => (
+                    <motion.div
+                      key={f.title}
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.65 + i * 0.08 }}
+                      whileHover={{ y: -5, borderColor: 'rgba(245,158,11,0.5)' }}
+                      className="bg-slate-900 border border-slate-800 rounded-2xl p-5 group cursor-default transition-all"
+                    >
+                      <motion.div
+                        animate={{ rotate: [0, 8, -8, 0] }}
+                        transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.4, ease: 'easeInOut' }}
+                        className="w-12 h-12 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-center text-2xl mb-4 group-hover:bg-amber-500/20 transition-colors"
+                      >
+                        {f.icon}
+                      </motion.div>
+                      <h4 className="text-white font-bold text-sm mb-2">{f.title}</h4>
+                      <p className="text-slate-400 text-xs leading-relaxed">{f.desc}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+
+              {/* Animated timeline */}
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9 }}
+                className="mb-14"
+              >
+                <h3 className="text-center text-xl font-black text-white mb-8">Our Journey 🗺️</h3>
+                <div className="relative">
+                  {/* Timeline line */}
+                  <motion.div
+                    initial={{ scaleY: 0 }}
+                    animate={{ scaleY: 1 }}
+                    transition={{ duration: 1.2, delay: 1, ease: 'easeInOut' }}
+                    className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-amber-500 via-orange-500 to-transparent origin-top hidden sm:block"
+                  />
+                  <div className="space-y-6">
+                    {[
+                      { year: '2022', event: 'Founded',      desc: 'MEGA started with a simple idea: Ethiopian restaurants deserve modern tools.' },
+                      { year: '2023', event: 'First 50',     desc: 'Onboarded our first 50 restaurants in Addis Ababa. Real feedback, rapid iteration.' },
+                      { year: '2024', event: 'AI Launch',    desc: 'Launched AI menu import — snap a photo of any menu and it goes digital instantly.' },
+                      { year: '2025', event: '500+ Rests.',  desc: 'Reached 500+ restaurants and 50,000 monthly orders across Ethiopia.' },
+                    ].map((t, i) => (
+                      <motion.div
+                        key={t.year}
+                        initial={{ opacity: 0, x: i % 2 === 0 ? -40 : 40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.5, delay: 1.05 + i * 0.15 }}
+                        className={`flex items-center gap-4 sm:gap-0 ${i % 2 === 0 ? 'sm:flex-row' : 'sm:flex-row-reverse'}`}
+                      >
+                        <div className={`flex-1 ${i % 2 === 0 ? 'sm:text-right sm:pr-10' : 'sm:text-left sm:pl-10'}`}>
+                          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 hover:border-amber-500/40 transition-all inline-block text-left sm:max-w-xs">
+                            <span className="text-amber-400 font-black text-xs block mb-1">{t.year} — {t.event}</span>
+                            <p className="text-slate-300 text-sm leading-relaxed">{t.desc}</p>
+                          </div>
+                        </div>
+                        {/* Dot */}
+                        <motion.div
+                          animate={{ scale: [1, 1.3, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, delay: i * 0.5 }}
+                          className="flex-shrink-0 w-5 h-5 bg-amber-500 border-4 border-slate-950 rounded-full z-10 hidden sm:block"
+                        />
+                        <div className="flex-1 hidden sm:block" />
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Bottom CTA */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.4 }}
+                className="text-center"
+              >
+                <p className="text-slate-400 text-sm mb-4">You found the hidden page 🎉 Here's a little gift:</p>
+                <Link
+                  to="/register-tenant"
+                  onClick={() => setHiddenOpen(false)}
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-black rounded-2xl shadow-2xl shadow-amber-500/30 hover:from-amber-600 hover:to-orange-700 transition-all transform hover:scale-105"
+                >
+                  🎁 Claim Your Free Trial
+                </Link>
+                <p className="text-slate-600 text-xs mt-3">Press <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 font-mono">Esc</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 font-mono">✕</kbd> to close</p>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── FEATURES ── */}
       <section id="features" className="py-20 lg:py-28 bg-slate-900/50">
