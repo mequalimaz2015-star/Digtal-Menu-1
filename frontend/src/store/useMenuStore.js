@@ -282,7 +282,6 @@ function makeStore(set, get) {
         allergens: Array.isArray(data.allergens) ? data.allergens.join(',') : data.allergens,
       })
       const i = res.data
-      const i = res.data
       set(s => ({
         menuItems: [...s.menuItems, {
           id: String(i.id), categoryId: String(i.category_id),
@@ -299,6 +298,7 @@ function makeStore(set, get) {
           menuItemRef: i.menu_item_ref || i.menuItemRef || '',
         }]
       }))
+    },
 
     updateMenuItem: async (id, data) => {
       set(s => ({ menuItems: s.menuItems.map(i => i.id === id ? { ...i, ...data } : i) }))
