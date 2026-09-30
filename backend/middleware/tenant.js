@@ -180,10 +180,21 @@ function requireTenantMatch(req, res, next) {
   }
   if (req.user.role === 'super_admin') return next()
 
-  // Allow when tenant_id matches OR when tenant_id is not set on user (legacy)
-  if (req.user.tenant_id && Number(req.user.tenant_id) !== Number(req.tenantId)) {
+  // Match by tenant_id (numeric)
+  const userTenantId   = req.user.tenant_id   ? Number(req.user.tenant_id)   : null
+  const resolvedId     = req.tenantId          ? Number(req.tenantId)         : null
+  const idMatch        = userTenantId && resolvedId && userTenantId === resolvedId
+
+  // Match by tenant_slug (string) — covers cases where ID resolution failed
+  const userSlug       = (req.user.tenant_slug || '').toLowerCase().trim()
+  const resolvedSlug   = (req.tenant?.slug     || '').toLowerCase().trim()
+  const slugMatch      = userSlug && resolvedSlug && userSlug === resolvedSlug
+
+  // If the user has a tenant_id but neither id nor slug matches → deny
+  if (userTenantId && !idMatch && !slugMatch) {
     return res.status(403).json({ error: 'Access denied: You do not have permission for this restaurant tenant' })
   }
+
   next()
 }
 

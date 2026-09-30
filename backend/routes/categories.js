@@ -43,12 +43,24 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), async 
     if (!name) return res.status(400).json({ error: 'Name required' })
 
     try {
-      const result = await query(`
+      const ins = await query(`
         INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order)
         VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *
       `, [req.tenantId, name, name_am || '', icon || '🍽️', color || '#e85d04', sort_order || 0])
-      if (result.rows[0]) return res.status(201).json(result.rows[0])
+
+      // Resolve the new row's id via insertId (MySQL) or SELECT fallback
+      let newId = ins.insertId ? Number(ins.insertId) : null
+      if (!newId) {
+        const sel = await query(
+          `SELECT id FROM categories WHERE tenant_id=$1 AND name=$2 ORDER BY id DESC LIMIT 1`,
+          [req.tenantId, name]
+        )
+        newId = sel.rows[0] ? Number(sel.rows[0].id) : null
+      }
+      if (newId) {
+        const row = await query(`SELECT * FROM categories WHERE id=$1`, [newId])
+        if (row.rows[0]) return res.status(201).json(row.rows[0])
+      }
     } catch (dbErr) {
       console.warn('DB write failed in POST /categories, using localStore:', dbErr.message)
     }
@@ -64,15 +76,17 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), async 
 router.put('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {
     const { name, name_am, icon, color, sort_order, is_active } = req.body
+    const catId = parseInt(req.params.id)
 
     try {
-      const result = await query(`
+      await query(`
         UPDATE categories SET
           name=$1, name_am=$2, icon=$3, color=$4, sort_order=$5, is_active=$6
         WHERE id=$7 AND tenant_id=$8
-        RETURNING *
-      `, [name, name_am || '', icon || '🍽️', color || '#e85d04', sort_order || 0, is_active !== false, parseInt(req.params.id), req.tenantId])
-      if (result.rows[0]) return res.json(result.rows[0])
+      `, [name, name_am || '', icon || '🍽️', color || '#e85d04', sort_order || 0, is_active !== false, catId, req.tenantId])
+
+      const row = await query(`SELECT * FROM categories WHERE id=$1 AND tenant_id=$2`, [catId, req.tenantId])
+      if (row.rows[0]) return res.json(row.rows[0])
     } catch (dbErr) {
       console.warn('DB update failed in PUT /categories/:id, using localStore:', dbErr.message)
     }

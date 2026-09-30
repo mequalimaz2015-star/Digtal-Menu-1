@@ -68,25 +68,65 @@ router.post('/register', async (req, res) => {
       const trialEndsAt = new Date()
       trialEndsAt.setDate(trialEndsAt.getDate() + 14)
 
-      const tenantRes = await query(`
+      // ── Step 1: insert tenant (no RETURNING — avoids MySQL emulation bugs) ──
+      const tenantInsert = await query(`
         INSERT INTO tenants (name, slug, email, phone, status, subscription_plan_id, subscription_status, trial_ends_at)
         VALUES ($1, $2, $3, $4, 'active', 1, 'trialing', $5)
-        RETURNING *
       `, [restaurant_name, cleanSlug, email, phone || null, trialEndsAt])
 
-      const tenant = tenantRes.rows[0]
+      // Resolve tenant id via insertId (MySQL) or SELECT fallback
+      let tenantId = tenantInsert.insertId ? Number(tenantInsert.insertId) : null
+      if (!tenantId) {
+        const tr = await query('SELECT id FROM tenants WHERE slug = $1', [cleanSlug])
+        tenantId = tr.rows[0] ? Number(tr.rows[0].id) : null
+      }
+      if (!tenantId) throw new Error('Could not resolve tenant ID after insert')
+
+      // Fetch full tenant row for the response
+      const tenantRow = await query('SELECT * FROM tenants WHERE id = $1', [tenantId])
+      const tenant = tenantRow.rows[0] || { id: tenantId, name: restaurant_name, slug: cleanSlug }
+
       const hashedPassword = await bcrypt.hash(password, 10)
 
-      const userRes = await query(`
+      // ── Step 2: insert admin user ─────────────────────────────────────────
+      const userInsert = await query(`
         INSERT INTO users (name, email, password, role, tenant_id, is_active)
         VALUES ($1, $2, $3, 'admin', $4, true)
-        RETURNING id, name, email, role, tenant_id
-      `, [admin_name || `${restaurant_name} Admin`, email, hashedPassword, tenant.id])
+      `, [admin_name || `${restaurant_name} Admin`, email, hashedPassword, tenantId])
 
-      const user = userRes.rows[0]
+      let userId = userInsert.insertId ? Number(userInsert.insertId) : null
+      if (!userId) {
+        const ur = await query('SELECT id FROM users WHERE LOWER(email) = $1', [email.toLowerCase()])
+        userId = ur.rows[0] ? Number(ur.rows[0].id) : null
+      }
+      if (!userId) throw new Error('Could not resolve user ID after insert')
+
+      // Fetch full user row
+      const userRow = await query('SELECT id, name, email, role, tenant_id FROM users WHERE id = $1', [userId])
+      const user = userRow.rows[0] || { id: userId, name: admin_name, email, role: 'admin', tenant_id: tenantId }
+
+      // ── Step 3: seed default categories for the new tenant ────────────────
+      try {
+        await query(`
+          INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order) VALUES
+            ($1, 'Breakfast', 'ቁርስ', '🍳', '#f48c06', 0),
+            ($1, 'Lunch', 'ምሳ', '🥗', '#2d9d4f', 1),
+            ($1, 'Dinner', 'እራት', '🥩', '#8b1a1a', 2),
+            ($1, 'Drinks', 'መጠጦች', '🥤', '#2980b9', 3),
+            ($1, 'Desserts', 'ጣፋጭ', '🍰', '#e91e8c', 4)
+        `, [tenantId])
+      } catch (_) {}
+
+      // ── Step 4: seed default tables ────────────────────────────────────────
+      try {
+        await query(`
+          INSERT INTO tables (tenant_id, number, capacity) VALUES
+            ($1, '1', 2), ($1, '2', 4), ($1, '3', 4), ($1, '4', 6)
+        `, [tenantId])
+      } catch (_) {}
 
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id, tenant_slug: tenant.slug },
+        { id: user.id, email: user.email, role: user.role, tenant_id: tenantId, tenant_slug: cleanSlug },
         process.env.JWT_SECRET || 'digital-menu-secret-key-2024-abc-restaurant',
         { expiresIn: '7d' }
       )

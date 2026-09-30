@@ -25,12 +25,23 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), checkT
     if (!number) return res.status(400).json({ error: 'Table number required' })
 
     try {
-      const r = await query(`
+      const ins = await query(`
         INSERT INTO tables (tenant_id, number, capacity, status)
         VALUES ($1, $2, $3, $4)
-        RETURNING *
       `, [req.tenantId, number, parseInt(capacity) || 4, status || 'available'])
-      if (r.rows[0]) return res.status(201).json(r.rows[0])
+
+      let newId = ins.insertId ? Number(ins.insertId) : null
+      if (!newId) {
+        const sel = await query(
+          `SELECT id FROM tables WHERE tenant_id=$1 AND number=$2 ORDER BY id DESC LIMIT 1`,
+          [req.tenantId, number]
+        )
+        newId = sel.rows[0] ? Number(sel.rows[0].id) : null
+      }
+      if (newId) {
+        const row = await query(`SELECT * FROM tables WHERE id=$1`, [newId])
+        if (row.rows[0]) return res.status(201).json(row.rows[0])
+      }
     } catch (dbErr) {
       console.warn('DB write failed in POST /tables, using localStore:', dbErr.message)
     }
@@ -43,14 +54,16 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), checkT
 router.put('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {
     const { number, capacity, status } = req.body
+    const tableId = parseInt(req.params.id)
 
     try {
-      const r = await query(`
+      await query(`
         UPDATE tables SET number=$1, capacity=$2, status=$3
         WHERE id=$4 AND tenant_id=$5
-        RETURNING *
-      `, [number, parseInt(capacity) || 4, status || 'available', parseInt(req.params.id), req.tenantId])
-      if (r.rows[0]) return res.json(r.rows[0])
+      `, [number, parseInt(capacity) || 4, status || 'available', tableId, req.tenantId])
+
+      const row = await query(`SELECT * FROM tables WHERE id=$1 AND tenant_id=$2`, [tableId, req.tenantId])
+      if (row.rows[0]) return res.json(row.rows[0])
     } catch (dbErr) {
       console.warn('DB update failed in PUT /tables/:id, using localStore:', dbErr.message)
     }

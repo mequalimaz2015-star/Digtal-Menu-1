@@ -120,11 +120,22 @@ async function query(text, values = []) {
       // INSERT ... RETURNING *
       const ins = text.match(/^(INSERT\s+INTO\s+(`?[a-zA-Z0-9_]+`?)[^]*?)\s+RETURNING\s+(.+)$/i)
       if (ins) {
+        const tableName = ins[2].replace(/`/g, '')
+        const selectCols = ins[3] === '*' ? '*' : ins[3]
         const { sql, values: vals } = toMySQL(ins[1], values)
         const [r] = await mysqlPool.query(sql, vals)
         if (r.insertId) {
-          const [rows] = await mysqlPool.query(`SELECT ${ins[3] === '*' ? '*' : ins[3]} FROM \`${ins[2].replace(/`/g,'')}\` WHERE id = ?`, [r.insertId])
-          return { rows, recordset: rows, rowCount: rows.length }
+          const [rows] = await mysqlPool.query(
+            `SELECT ${selectCols} FROM \`${tableName}\` WHERE id = ?`, [r.insertId]
+          )
+          return { rows, recordset: rows, rowCount: rows.length, insertId: r.insertId }
+        }
+        // insertId was 0 — try to find the row by the last inserted id
+        const [lastRows] = await mysqlPool.query(
+          `SELECT ${selectCols} FROM \`${tableName}\` ORDER BY id DESC LIMIT 1`
+        )
+        if (lastRows.length > 0) {
+          return { rows: lastRows, recordset: lastRows, rowCount: lastRows.length, insertId: lastRows[0].id }
         }
         return { rows: [], recordset: [], rowCount: 1 }
       }
