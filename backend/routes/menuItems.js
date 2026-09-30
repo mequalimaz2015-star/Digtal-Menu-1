@@ -367,27 +367,26 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
 
     const tid = req.tenantId
 
-    // 1. Upsert categories — create if name doesn't exist for this tenant
-    const categoryIdMap = {} // categoryName → id
+    // 1. Upsert categories — keys stored LOWERCASE for case-insensitive lookup
+    const categoryIdMap = {} // catName.toLowerCase().trim() → id
 
-    // Collect all unique category names from items too (in case categories array is incomplete)
     const allCatNames = new Set([
       ...categories.map(c => c.name).filter(Boolean),
       ...items.map(i => i.categoryName).filter(Boolean),
     ])
 
     const catStyleMap = {}
-    categories.forEach(c => { if (c.name) catStyleMap[c.name] = c })
+    categories.forEach(c => { if (c.name) catStyleMap[c.name.toLowerCase().trim()] = c })
 
     for (const catName of allCatNames) {
+      const catKey = catName.toLowerCase().trim()   // ← FIX: declare catKey here
       try {
-        // Check if category already exists
         const existing = await query(
           `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
           [tid, catName]
         )
         if (existing.rows[0]) {
-          categoryIdMap[catName] = Number(existing.rows[0].id)
+          categoryIdMap[catKey] = Number(existing.rows[0].id)
           continue
         }
 
@@ -395,16 +394,14 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
           `SELECT COALESCE(MAX(sort_order),0)+1 AS next FROM categories WHERE tenant_id=$1`, [tid]
         )
         const sortOrder = Number(sortRes.rows[0]?.next || 1)
-        const catStyle  = catStyleMap[catName] || {}
+        const catStyle  = catStyleMap[catKey] || {}
 
-        // Plain INSERT — no RETURNING (avoids MySQL emulation bug)
         const ins = await query(
           `INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order, is_active)
            VALUES ($1,$2,$3,$4,$5,$6,true)`,
           [tid, catName, catStyle.nameAm || '', catStyle.icon || '🍽️', catStyle.color || '#e85d04', sortOrder]
         )
 
-        // Resolve id via insertId (MySQL) or SELECT fallback
         let newCatId = ins.insertId ? Number(ins.insertId) : null
         if (!newCatId) {
           const sel = await query(
@@ -415,14 +412,28 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
         }
 
         if (newCatId) {
-          categoryIdMap[catName] = newCatId
+          categoryIdMap[catKey] = newCatId   // ← FIX: use catKey not catName
+          console.log(`✅ Bulk cat: "${catName}" → id ${newCatId}`)
         } else {
           console.warn(`Bulk import: could not resolve id for category "${catName}"`)
         }
       } catch (catErr) {
+        // Duplicate key or other error — recover by SELECT
         console.warn(`Bulk import: category "${catName}" error:`, catErr.message)
+        try {
+          const recoverSel = await query(
+            `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
+            [tid, catName]
+          )
+          if (recoverSel.rows[0]) {
+            categoryIdMap[catKey] = Number(recoverSel.rows[0].id)
+            console.log(`✅ Bulk cat recovered: "${catName}" → id ${recoverSel.rows[0].id}`)
+          }
+        } catch (_) {}
       }
     }
+
+    console.log(`📂 Bulk categoryIdMap keys:`, Object.keys(categoryIdMap))
 
     // 2. Build ref prefix once
     let refPrefix = 'M'
@@ -460,9 +471,10 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
       if (!itemName)  { skipped.push('(unnamed)'); continue }
       if (itemPrice <= 0) { skipped.push(itemName); continue }
 
-      const catId = categoryIdMap[item.categoryName]
+      // Lowercase lookup — matches how keys were stored above
+      const catId = categoryIdMap[(item.categoryName || '').toLowerCase().trim()]
       if (!catId) {
-        console.warn(`Bulk import: no catId for "${item.categoryName}" — skipping "${itemName}"`)
+        console.warn(`Bulk import: no catId for "${item.categoryName}" (key="${(item.categoryName||'').toLowerCase().trim()}") — skipping "${itemName}"`)
         skipped.push(itemName)
         continue
       }
