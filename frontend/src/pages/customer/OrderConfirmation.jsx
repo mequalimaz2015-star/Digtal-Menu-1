@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTenantNav } from '../../hooks/useTenantNav'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { FiPrinter } from 'react-icons/fi'
@@ -11,6 +12,7 @@ import toast from 'react-hot-toast'
 export default function OrderConfirmation() {
   const { orderId } = useParams()
   const navigate = useNavigate()
+  const { tNavigate } = useTenantNav()
   const { t } = useTranslation()
   const [orderData, setOrderData] = useState(null)
   const [prevStatus, setPrevStatus] = useState(null)
@@ -297,7 +299,7 @@ export default function OrderConfirmation() {
           </div>
 
           <button
-            onClick={() => navigate('/menu')}
+            onClick={() => tNavigate('/menu')}
             className={`w-full font-bold py-4 rounded-2xl transition-colors shadow-lg mt-2 text-white ${
               isTakeaway
                 ? 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 shadow-blue-200 dark:shadow-none'

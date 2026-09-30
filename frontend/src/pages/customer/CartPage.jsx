@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTenantNav } from '../../hooks/useTenantNav'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { FiArrowLeft, FiTrash2, FiMinus, FiPlus, FiShoppingBag } from 'react-icons/fi'
@@ -11,6 +12,7 @@ import OrderTypePicker from '../../components/customer/OrderTypePicker'
 export default function CartPage() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const { tNavigate } = useTenantNav()
   const language = i18n.language
   const { items, removeItem, updateQuantity, clearCart, orderType, setOrderType } = useCartStore()
 
@@ -29,7 +31,7 @@ export default function CartPage() {
       <div className="sticky top-0 z-30 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-2xl mx-auto px-4 flex items-center gap-3 h-14">
           <button
-            onClick={() => navigate('/menu')}
+            onClick={() => tNavigate('/menu')}
             className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <FiArrowLeft size={20} />
@@ -50,7 +52,7 @@ export default function CartPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-6 pb-40">
         {items.length === 0 ? (
-          <EmptyCart onBrowse={() => navigate('/menu')} t={t} />
+          <EmptyCart onBrowse={() => tNavigate('/menu')} t={t} />
         ) : (
           <>
             {/* Cart Items */}
@@ -101,7 +103,7 @@ export default function CartPage() {
         <div className="fixed bottom-16 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 p-4 z-30">
           <div className="max-w-2xl mx-auto">
             <button
-              onClick={() => navigate('/checkout')}
+              onClick={() => tNavigate('/checkout')}
               className="w-full bg-orange-500 text-white font-bold py-4 rounded-2xl hover:bg-orange-600 active:scale-[0.98] transition-all shadow-lg shadow-orange-200 dark:shadow-none text-lg"
             >
               {t('checkout')} • {grandTotal.toFixed(2)} ETB

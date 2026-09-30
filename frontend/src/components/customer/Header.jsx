@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTenantNav } from '../../hooks/useTenantNav'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
@@ -20,6 +21,7 @@ export default function Header({
 }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const { tNavigate } = useTenantNav()
   const { darkMode, toggleDarkMode, language, setLanguage } = useAppStore()
   const { info: restaurant } = useRestaurantStore()
   const items = useCartStore((s) => s.items)
@@ -85,7 +87,7 @@ export default function Header({
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">
-                {restaurant?.name || 'ABC Restaurant'}
+                {restaurant?.name || 'MEGA Digital Menu'}
               </h1>
               {tableNumber && (
                 <span className="text-xs text-orange-500 font-semibold">
@@ -281,7 +283,7 @@ export default function Header({
             {/* Cart */}
             <motion.button
               whileTap={{ scale: 0.9 }}
-              onClick={() => navigate('/cart')}
+              onClick={() => tNavigate('/cart')}
               className="relative w-9 h-9 ml-0.5 rounded-xl flex items-center justify-center bg-orange-500 text-white shadow-md shadow-orange-200 dark:shadow-none hover:bg-orange-600 transition-colors"
             >
               <FiShoppingCart size={18} />

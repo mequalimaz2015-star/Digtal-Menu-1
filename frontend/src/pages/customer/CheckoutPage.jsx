@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTenantNav } from '../../hooks/useTenantNav'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
@@ -32,6 +33,7 @@ export default function CheckoutPage() {
   const { t, i18n } = useTranslation()
   const language = i18n.language
   const navigate = useNavigate()
+  const { tNavigate } = useTenantNav()
   const { items, tableNumber, orderType, setTable, clearCart } = useCartStore()
   const { placeOrder } = useOrderStore()
   const { register, handleSubmit } = useForm()
@@ -121,7 +123,7 @@ export default function CheckoutPage() {
         estimatedTime: isTakeaway ? 20 : Math.floor(Math.random() * 15 + 15),
       })
       clearCart()
-      navigate(`/order-confirmation/${order.id}`, { replace: true })
+      tNavigate(`/order-confirmation/${order.id}`, { replace: true })
     } catch {
       toast.error(t('error'))
     } finally {
@@ -129,7 +131,7 @@ export default function CheckoutPage() {
     }
   }
 
-  if (items.length === 0) { navigate('/menu', { replace: true }); return null }
+  if (items.length === 0) { tNavigate('/menu', { replace: true }); return null }
 
   const statusColors = {
     available: 'border-green-400 bg-green-50 dark:bg-green-900/20',
@@ -143,7 +145,7 @@ export default function CheckoutPage() {
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-2xl mx-auto px-4 flex items-center gap-3 h-14">
-          <button onClick={() => navigate('/cart')} className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
+          <button onClick={() => tNavigate('/cart')} className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
             <FiArrowLeft size={20} />
           </button>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('checkout')}</h1>
