@@ -9,20 +9,15 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import axios from 'axios'
 import toast from 'react-hot-toast'
+import client from '../../api/client'
 import {
   FiUploadCloud, FiImage, FiFileText, FiX, FiCheck,
   FiDownload, FiAlertTriangle, FiEdit2, FiTrash2,
   FiChevronRight, FiZap, FiRefreshCw,
 } from 'react-icons/fi'
 
-const API = import.meta.env.VITE_API_URL || '/api'
-
-function authHeaders() {
-  const token = localStorage.getItem('token')
-  return { Authorization: `Bearer ${token}` }
-}
+// client.js already attaches Authorization + X-Tenant-Slug on every request
 
 // ── Tiny editable cell ─────────────────────────────────────────────────────────
 function EditCell({ value, onChange, type = 'text', className = '' }) {
@@ -100,11 +95,11 @@ export default function AIMenuImportModal({ onClose, onImported }) {
 
     try {
       const endpoint = mode === 'image'
-        ? `${API}/ai-menu-import/analyze-image`
-        : `${API}/ai-menu-import/analyze-excel`
+        ? '/ai-menu-import/analyze-image'
+        : '/ai-menu-import/analyze-excel'
 
-      const res = await axios.post(endpoint, form, {
-        headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+      const res = await client.post(endpoint, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       })
 
       const data = res.data
@@ -128,10 +123,9 @@ export default function AIMenuImportModal({ onClose, onImported }) {
 
     setImporting(true)
     try {
-      const res = await axios.post(
-        `${API}/menu-items/bulk`,
-        { categories, items: validItems },
-        { headers: authHeaders() }
+      const res = await client.post(
+        '/menu-items/bulk',
+        { categories, items: validItems }
       )
       setResult(res.data)
       toast.success(`✅ Imported ${res.data.created} items into ${res.data.categoriesCreated} categories!`)
@@ -145,8 +139,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
   // ── Download template ─────────────────────────────────────────────────────────
   const downloadTemplate = async () => {
     try {
-      const res = await axios.get(`${API}/ai-menu-import/template`, {
-        headers: authHeaders(),
+      const res = await client.get('/ai-menu-import/template', {
         responseType: 'blob',
       })
       const url = URL.createObjectURL(res.data)
