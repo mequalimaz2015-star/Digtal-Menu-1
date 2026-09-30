@@ -252,6 +252,111 @@ router.put('/:id', requireAuth, requireTenantMatch, requireRole(['admin']), asyn
   }
 })
 
+// ── Image URL lookup by food name/category ────────────────────────────────────
+function getImageUrl(name, categoryName) {
+  const n = (name || '').toLowerCase()
+  const c = (categoryName || '').toLowerCase()
+
+  // Specific Ethiopian / common dishes
+  if (/injera|firfir|kitfo|tibs|gored|derek|alicha|awaze/.test(n))
+    return 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=400&q=80'
+  if (/doro wat|doro wot|chicken stew/.test(n))
+    return 'https://images.unsplash.com/photo-1574484284002-952d92a03a05?w=400&q=80'
+  if (/shiro|misir|lentil|fasolia/.test(n))
+    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80'
+  if (/fatira|fetira/.test(n))
+    return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&q=80'
+  if (/manyeesh|zaatar|manakish/.test(n))
+    return 'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=400&q=80'
+  if (/cookie|brownie|biscuit/.test(n))
+    return 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=400&q=80'
+  if (/sandwich|sub|wrap|club/.test(n))
+    return 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=80'
+  if (/burger|beef burger|chicken burger/.test(n))
+    return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80'
+  if (/pizza|margherita|pepperoni/.test(n))
+    return 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400&q=80'
+  if (/pasta|spaghetti|fettuccine|penne/.test(n))
+    return 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400&q=80'
+  if (/steak|ribeye|sirloin/.test(n))
+    return 'https://images.unsplash.com/photo-1546833998-877b37c2e5c6?w=400&q=80'
+  if (/chicken|grilled chicken|fried chicken/.test(n))
+    return 'https://images.unsplash.com/photo-1598103442097-8b74394b95c8?w=400&q=80'
+  if (/fish|tilapia|salmon|sea bass/.test(n))
+    return 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&q=80'
+  if (/shrimp|prawn|seafood/.test(n))
+    return 'https://images.unsplash.com/photo-1565680018434-b513d5e5fd47?w=400&q=80'
+  if (/salad|green salad|caesar/.test(n))
+    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80'
+  if (/soup|stew|broth/.test(n))
+    return 'https://images.unsplash.com/photo-1547592180-85f173990554?w=400&q=80'
+  if (/rice|pilaf|biryani|fried rice/.test(n))
+    return 'https://images.unsplash.com/photo-1536304993881-ff86e0c5c5af?w=400&q=80'
+  if (/egg|omelette|scrambled|boiled egg/.test(n))
+    return 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=400&q=80'
+  if (/pancake|waffle|crepe/.test(n))
+    return 'https://images.unsplash.com/photo-1528207776546-365bb710ee93?w=400&q=80'
+  if (/toast|bread|croissant/.test(n))
+    return 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&q=80'
+  if (/cake|cheesecake|tiramisu/.test(n))
+    return 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80'
+  if (/ice cream|gelato|sundae/.test(n))
+    return 'https://images.unsplash.com/photo-1570197788417-0e82375c9371?w=400&q=80'
+  if (/chocolate|brownie|truffle/.test(n))
+    return 'https://images.unsplash.com/photo-1481391319762-47dff72954d9?w=400&q=80'
+  if (/coffee|espresso|cappuccino|latte|macchiato/.test(n))
+    return 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&q=80'
+  if (/tea|chai|green tea/.test(n))
+    return 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&q=80'
+  if (/juice|mango juice|orange juice|smoothie/.test(n))
+    return 'https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=400&q=80'
+  if (/water|mineral water|sparkling/.test(n))
+    return 'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=400&q=80'
+  if (/soda|cola|fanta|sprite|soft drink/.test(n))
+    return 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400&q=80'
+  if (/beer|wine|alcohol/.test(n))
+    return 'https://images.unsplash.com/photo-1535958636474-b021ee887b13?w=400&q=80'
+  if (/breakfast/.test(n) || /breakfast/.test(c))
+    return 'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=400&q=80'
+  if (/gyro|shawarma|kebab|wrap/.test(n))
+    return 'https://images.unsplash.com/photo-1597712682289-f9f49f30c0e6?w=400&q=80'
+  if (/falafel|hummus|pita/.test(n))
+    return 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&q=80'
+  if (/taco|burrito|quesadilla/.test(n))
+    return 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=400&q=80'
+  if (/sushi|roll|sashimi/.test(n))
+    return 'https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=400&q=80'
+
+  // Category fallbacks
+  if (/beef|meat|steak/.test(c))
+    return 'https://images.unsplash.com/photo-1546833998-877b37c2e5c6?w=400&q=80'
+  if (/chicken|poultry/.test(c))
+    return 'https://images.unsplash.com/photo-1598103442097-8b74394b95c8?w=400&q=80'
+  if (/fish|seafood/.test(c))
+    return 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&q=80'
+  if (/salad|veg/.test(c))
+    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80'
+  if (/pizza/.test(c))
+    return 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400&q=80'
+  if (/burger/.test(c))
+    return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80'
+  if (/pasta|noodle/.test(c))
+    return 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400&q=80'
+  if (/soup|stew/.test(c))
+    return 'https://images.unsplash.com/photo-1547592180-85f173990554?w=400&q=80'
+  if (/dessert|cake|sweet/.test(c))
+    return 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80'
+  if (/coffee|tea/.test(c))
+    return 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&q=80'
+  if (/drink|beverage|juice/.test(c))
+    return 'https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=400&q=80'
+  if (/breakfast/.test(c))
+    return 'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=400&q=80'
+
+  // Generic food fallback
+  return 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80'
+}
+
 // ── POST /api/menu-items/bulk ──────────────────────────────────────────────────
 // Atomically creates categories (if new) + all items from AI/Excel import preview.
 // Body: { categories: [{name, icon, color}], items: [{categoryName, name, ...}] }
@@ -264,39 +369,62 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
 
     // 1. Upsert categories — create if name doesn't exist for this tenant
     const categoryIdMap = {} // categoryName → id
-    for (const cat of categories) {
-      if (!cat.name) continue
+
+    // Collect all unique category names from items too (in case categories array is incomplete)
+    const allCatNames = new Set([
+      ...categories.map(c => c.name).filter(Boolean),
+      ...items.map(i => i.categoryName).filter(Boolean),
+    ])
+
+    const catStyleMap = {}
+    categories.forEach(c => { if (c.name) catStyleMap[c.name] = c })
+
+    for (const catName of allCatNames) {
       try {
         // Check if category already exists
         const existing = await query(
           `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
-          [tid, cat.name]
+          [tid, catName]
         )
         if (existing.rows[0]) {
-          categoryIdMap[cat.name] = existing.rows[0].id
+          categoryIdMap[catName] = Number(existing.rows[0].id)
+          continue
+        }
+
+        const sortRes = await query(
+          `SELECT COALESCE(MAX(sort_order),0)+1 AS next FROM categories WHERE tenant_id=$1`, [tid]
+        )
+        const sortOrder = Number(sortRes.rows[0]?.next || 1)
+        const catStyle  = catStyleMap[catName] || {}
+
+        // Plain INSERT — no RETURNING (avoids MySQL emulation bug)
+        const ins = await query(
+          `INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order, is_active)
+           VALUES ($1,$2,$3,$4,$5,$6,true)`,
+          [tid, catName, catStyle.nameAm || '', catStyle.icon || '🍽️', catStyle.color || '#e85d04', sortOrder]
+        )
+
+        // Resolve id via insertId (MySQL) or SELECT fallback
+        let newCatId = ins.insertId ? Number(ins.insertId) : null
+        if (!newCatId) {
+          const sel = await query(
+            `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
+            [tid, catName]
+          )
+          newCatId = sel.rows[0] ? Number(sel.rows[0].id) : null
+        }
+
+        if (newCatId) {
+          categoryIdMap[catName] = newCatId
         } else {
-          const sortRes = await query(
-            `SELECT COALESCE(MAX(sort_order),0)+1 AS next FROM categories WHERE tenant_id=$1`, [tid]
-          )
-          const sortOrder = sortRes.rows[0]?.next || 1
-          const ins = await query(
-            `INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order, is_active)
-             VALUES ($1,$2,$3,$4,$5,$6,true) RETURNING id`,
-            [tid, cat.name, cat.nameAm || '', cat.icon || '🍽️', cat.color || '#e85d04', sortOrder]
-          )
-          categoryIdMap[cat.name] = ins.rows[0].id
+          console.warn(`Bulk import: could not resolve id for category "${catName}"`)
         }
       } catch (catErr) {
-        console.warn(`Bulk import: category "${cat.name}" error:`, catErr.message)
+        console.warn(`Bulk import: category "${catName}" error:`, catErr.message)
       }
     }
 
-    // 2. Insert items — skip rows missing name or price
-    const created = []
-    const skipped = []
-
-    // Get the prefix + current counter once, then increment in-process
-    // (avoids N separate DB reads for each item)
+    // 2. Build ref prefix once
     let refPrefix = 'M'
     let refCounter = 1
     try {
@@ -309,7 +437,6 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
         .slice(0, 3)
         .replace(/[^A-Z]/g, 'M') || 'M'
 
-      // Find the last ref number used for this prefix
       const lastRes = await query(
         `SELECT menu_item_ref FROM menu_items
          WHERE tenant_id=$1 AND menu_item_ref LIKE $2
@@ -322,53 +449,82 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
       }
     } catch (_) {}
 
+    // 3. Insert items
+    const created = []
+    const skipped = []
+
     for (const item of items) {
-      if (!item.name || !item.price) { skipped.push(item.name || '(unnamed)'); continue }
+      // Validate — skip only if truly no name or price
+      const itemName  = String(item.name  || '').trim()
+      const itemPrice = parseFloat(item.price) || 0
+      if (!itemName)  { skipped.push('(unnamed)'); continue }
+      if (itemPrice <= 0) { skipped.push(itemName); continue }
 
       const catId = categoryIdMap[item.categoryName]
-      if (!catId) { skipped.push(item.name); continue }
+      if (!catId) {
+        console.warn(`Bulk import: no catId for "${item.categoryName}" — skipping "${itemName}"`)
+        skipped.push(itemName)
+        continue
+      }
 
       const menuItemRef = `${refPrefix}-${String(refCounter).padStart(3, '0')}`
 
+      // Auto-assign attractive image if none provided
+      const imageUrl = item.imageUrl || item.image_url ||
+        getImageUrl(itemName, item.categoryName)
+
       try {
-        const r = await query(`
+        // Plain INSERT — no RETURNING
+        const ins = await query(`
           INSERT INTO menu_items
             (tenant_id, category_id, name, name_am, description, description_am,
              price, image_url, prep_time, is_spicy, is_vegetarian, is_available,
              is_featured, is_popular, is_best_seller, chef_recommended,
              rating, calories, discount, allergens, menu_item_ref)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-          RETURNING id, menu_item_ref
         `, [
           tid,
           catId,
-          item.name,
+          itemName,
           item.nameAm        || '',
           item.description   || '',
           item.descriptionAm || '',
-          parseFloat(item.price)    || 0,
-          item.imageUrl      || item.image_url || '',
+          itemPrice,
+          imageUrl,
           parseInt(item.prepTime || item.prep_time) || 15,
-          item.isSpicy        ? true : false,
-          item.isVegetarian   ? true : false,
-          true,
-          item.isFeatured     ? true : false,
-          item.isBestSeller   ? true : false,
-          item.isBestSeller   ? true : false,
-          false,
+          item.isSpicy      ? 1 : 0,
+          item.isVegetarian ? 1 : 0,
+          1,  // is_available = true
+          item.isFeatured   ? 1 : 0,
+          item.isBestSeller ? 1 : 0,
+          item.isBestSeller ? 1 : 0,
+          0,  // chef_recommended
           parseFloat(item.rating) || 4.5,
           item.calories ? parseInt(item.calories) : null,
           parseFloat(item.discount) || 0,
           item.allergens || '',
           menuItemRef,
         ])
-        created.push({ id: r.rows[0].id, name: item.name, ref: r.rows[0].menu_item_ref })
-        refCounter++ // only increment on success
+
+        // Resolve new item id
+        let newItemId = ins.insertId ? Number(ins.insertId) : null
+        if (!newItemId) {
+          const sel = await query(
+            `SELECT id FROM menu_items WHERE tenant_id=$1 AND menu_item_ref=$2 LIMIT 1`,
+            [tid, menuItemRef]
+          )
+          newItemId = sel.rows[0] ? Number(sel.rows[0].id) : null
+        }
+
+        created.push({ id: newItemId, name: itemName, ref: menuItemRef })
+        refCounter++
       } catch (itemErr) {
-        console.warn(`Bulk import: item "${item.name}" error:`, itemErr.message)
-        skipped.push(item.name)
+        console.warn(`Bulk import: item "${itemName}" error:`, itemErr.message)
+        skipped.push(itemName)
       }
     }
+
+    console.log(`✅ Bulk import: ${created.length} items created, ${skipped.length} skipped | tenant ${tid}`)
 
     return res.status(201).json({
       created: created.length,
