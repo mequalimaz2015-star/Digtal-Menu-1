@@ -64,7 +64,7 @@ export default function SplashScreen() {
           transition={{ delay: 0.4, duration: 0.6 }}
           className="text-4xl font-bold text-white mb-2 tracking-tight"
         >
-          ABC Restaurant
+          MEGA Digital Menu
         </motion.h1>
 
         <motion.p
@@ -94,7 +94,7 @@ export default function SplashScreen() {
           transition={{ delay: 0.7, duration: 0.6 }}
           className="mt-6 mb-10"
         >
-          <p className="text-white/80 text-base">{t('welcome')} ABC Restaurant</p>
+          <p className="text-white/80 text-base">{t('welcome')} MEGA Digital Menu</p>
           <p className="text-white/60 text-sm mt-1">{t('preparingMenu')}</p>
         </motion.div>
 

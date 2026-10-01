@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import client from '../../api/client'
@@ -30,7 +30,7 @@ function StepLine({ done }) {
 }
 
 // ── Input component ────────────────────────────────────────────────────────────
-function Field({ label, icon, error, children }) {
+function Field({ label, icon, error, hint, children }) {
   return (
     <div>
       <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">
@@ -38,11 +38,19 @@ function Field({ label, icon, error, children }) {
       </label>
       {children}
       {error && <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1"><span>⚠️</span>{error}</p>}
+      {!error && hint && <p className="text-slate-500 text-xs mt-1.5 flex items-center gap-1">{hint}</p>}
     </div>
   )
 }
 
-const inputCls = 'w-full px-4 py-3.5 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-all text-sm'
+const inputCls = (hasError, isOk) =>
+  `w-full px-4 py-3.5 bg-slate-800/80 border rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-1 transition-all text-sm ${
+    hasError
+      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30'
+      : isOk
+        ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/30'
+        : 'border-slate-700 focus:border-amber-500 focus:ring-amber-500/30'
+  }`
 
 export default function TenantRegistration() {
   const navigate = useNavigate()
@@ -53,16 +61,42 @@ export default function TenantRegistration() {
     restaurant_name: '', slug: '', admin_name: '',
     email: '', phone: '', password: '', tin_number: '', address: '',
   })
-  const [showPass, setShowPass] = useState(false)
-  const [errors, setErrors]     = useState({})
-  const [loading, setLoading]   = useState(false)
+  const [showPass, setShowPass]   = useState(false)
+  const [errors, setErrors]       = useState({})
+  const [touched, setTouched]     = useState({})
+  const [loading, setLoading]     = useState(false)
+
+  // Slug availability state
+  const [slugStatus, setSlugStatus] = useState(null) // null | 'checking' | 'available' | 'taken' | 'error'
+  const slugDebounceRef = useRef(null)
+
+  // Password strength
+  const passwordStrength = (() => {
+    const p = form.password
+    if (!p) return { score: 0, label: '', color: '' }
+    let score = 0
+    if (p.length >= 6)  score++
+    if (p.length >= 10) score++
+    if (/[A-Z]/.test(p)) score++
+    if (/[0-9]/.test(p)) score++
+    if (/[^A-Za-z0-9]/.test(p)) score++
+    const levels = [
+      { label: 'Too short', color: 'bg-red-500' },
+      { label: 'Weak',      color: 'bg-red-400' },
+      { label: 'Fair',      color: 'bg-amber-400' },
+      { label: 'Good',      color: 'bg-amber-500' },
+      { label: 'Strong',    color: 'bg-emerald-500' },
+      { label: 'Very strong', color: 'bg-emerald-400' },
+    ]
+    return { score, ...levels[Math.min(score, levels.length - 1)] }
+  })()
 
   // Step 2 OTP
   const [otp, setOtp]               = useState(['', '', '', '', '', ''])
   const [otpError, setOtpError]     = useState('')
   const [otpLoading, setOtpLoading] = useState(false)
   const [resendTimer, setResendTimer] = useState(0)
-  const [devCode, setDevCode]       = useState(null) // shown when SMTP not configured
+  const [devCode, setDevCode]       = useState(null)
   const otpRefs = useRef([])
 
   // Step 3 success
@@ -72,6 +106,79 @@ export default function TenantRegistration() {
   const handleNameChange = (val) => {
     const autoSlug = val.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
     setForm(p => ({ ...p, restaurant_name: val, slug: autoSlug }))
+    checkSlugAvailability(autoSlug)
+    if (touched.restaurant_name) validateField('restaurant_name', val)
+  }
+
+  // ── Real-time slug availability check (debounced 500 ms) ──────────────────
+  const checkSlugAvailability = useCallback((slug) => {
+    clearTimeout(slugDebounceRef.current)
+    const clean = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    if (!clean || clean.length < 3) { setSlugStatus(null); return }
+    setSlugStatus('checking')
+    slugDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await client.get(`/tenants/check-slug?slug=${encodeURIComponent(clean)}`)
+        setSlugStatus(res.data.available ? 'available' : 'taken')
+        if (!res.data.available) {
+          setErrors(e => ({ ...e, slug: res.data.reason || 'This URL is already taken' }))
+        } else {
+          setErrors(e => { const n = { ...e }; delete n.slug; return n })
+        }
+      } catch {
+        setSlugStatus(null)
+      }
+    }, 500)
+  }, [])
+
+  // ── Per-field validation ───────────────────────────────────────────────────
+  const validateField = useCallback((name, value) => {
+    let err = ''
+    switch (name) {
+      case 'restaurant_name':
+        if (!value.trim()) err = 'Restaurant name is required'
+        else if (value.trim().length < 2) err = 'Name must be at least 2 characters'
+        break
+      case 'slug':
+        if (!value.trim()) err = 'URL slug is required'
+        else if (value.length < 3) err = 'Slug must be at least 3 characters'
+        else if (!/^[a-z0-9-]+$/.test(value)) err = 'Only lowercase letters, numbers, and hyphens allowed'
+        break
+      case 'admin_name':
+        if (!value.trim()) err = 'Owner name is required'
+        break
+      case 'email':
+        if (!value.trim()) err = 'Email address is required'
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) err = 'Enter a valid email address'
+        break
+      case 'phone':
+        if (value && !/^[\d\s+\-()]{7,15}$/.test(value.replace(/\s/g, '')))
+          err = 'Enter a valid phone number'
+        break
+      case 'tin_number':
+        if (value && !/^\d{10}$/.test(value.replace(/\s/g, '')))
+          err = 'TIN number must be exactly 10 digits'
+        break
+      case 'password':
+        if (!value) err = 'Password is required'
+        else if (value.length < 6) err = 'Password must be at least 6 characters'
+        break
+      default: break
+    }
+    setErrors(e => err ? { ...e, [name]: err } : (({ [name]: _, ...rest }) => rest)(e))
+    return !err
+  }, [])
+
+  const handleBlur = (name) => {
+    setTouched(t => ({ ...t, [name]: true }))
+    validateField(name, form[name])
+    // Trigger slug check on blur too
+    if (name === 'slug') checkSlugAvailability(form.slug)
+  }
+
+  const handleChange = (name, value) => {
+    setForm(p => ({ ...p, [name]: value }))
+    if (touched[name]) validateField(name, value)
   }
 
   // ── Countdown timer for resend ─────────────────────────────────────────────
@@ -81,16 +188,23 @@ export default function TenantRegistration() {
     return () => clearInterval(t)
   }, [resendTimer])
 
-  // ── Validate step 1 ────────────────────────────────────────────────────────
+  // ── Validate all step 1 fields ─────────────────────────────────────────────
   const validateStep1 = () => {
-    const e = {}
-    if (!form.restaurant_name.trim()) e.restaurant_name = 'Restaurant name is required'
-    if (!form.slug.trim()) e.slug = 'URL slug is required'
-    if (!form.admin_name.trim()) e.admin_name = 'Owner name is required'
-    if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = 'Valid email required'
-    if (!form.password || form.password.length < 6) e.password = 'Password must be at least 6 characters'
-    setErrors(e)
-    return Object.keys(e).length === 0
+    const fields = ['restaurant_name', 'slug', 'admin_name', 'email', 'phone', 'tin_number', 'password']
+    // Mark all touched
+    const allTouched = fields.reduce((acc, f) => ({ ...acc, [f]: true }), {})
+    setTouched(t => ({ ...t, ...allTouched }))
+    let valid = true
+    fields.forEach(f => { if (!validateField(f, form[f])) valid = false })
+    if (slugStatus === 'taken') {
+      setErrors(e => ({ ...e, slug: 'This URL is already taken. Please choose a different one.' }))
+      valid = false
+    }
+    if (slugStatus === 'checking') {
+      setErrors(e => ({ ...e, slug: 'Please wait — checking URL availability…' }))
+      valid = false
+    }
+    return valid
   }
 
   // ── Step 1 → send OTP ──────────────────────────────────────────────────────
@@ -105,14 +219,17 @@ export default function TenantRegistration() {
       })
       if (res.data.devCode) {
         setDevCode(res.data.devCode)
-        // Auto-fill the OTP boxes so user doesn't have to type it manually
         setOtp(res.data.devCode.split(''))
+      } else {
+        setDevCode(null)
       }
       setStep(2)
       setResendTimer(60)
     } catch (err) {
-      const msg = err.response?.data?.error || 'Failed to send verification email'
-      setErrors({ email: msg })
+      const data = err.response?.data || {}
+      const msg  = data.error || 'Failed to send verification email'
+      const field = data.field || 'email'
+      setErrors(e => ({ ...e, [field]: msg }))
     } finally {
       setLoading(false)
     }
@@ -150,13 +267,9 @@ export default function TenantRegistration() {
     setOtpLoading(true)
     setOtpError('')
     try {
-      // Verify OTP first
       await client.post('/auth/verify-otp', { email: form.email, code })
-
-      // OTP valid → complete registration
       const res = await client.post('/tenants/register', form)
 
-      // Clear any stale session before storing new one
       Object.keys(localStorage).filter(k => k.startsWith('menu-store-')).forEach(k => localStorage.removeItem(k))
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('admin-user', JSON.stringify(res.data.user))
@@ -165,7 +278,15 @@ export default function TenantRegistration() {
       setSuccessData({ tenant: res.data.tenant, user: res.data.user })
       setStep(3)
     } catch (err) {
-      setOtpError(err.response?.data?.error || 'Verification failed. Please try again.')
+      const data = err.response?.data || {}
+      const msg  = data.error || 'Verification failed. Please try again.'
+      // If the error is about a duplicate field, go back to step 1 and show it there
+      if (data.field && data.field !== 'otp') {
+        setErrors(e => ({ ...e, [data.field]: msg }))
+        setStep(1)
+      } else {
+        setOtpError(msg)
+      }
     } finally {
       setOtpLoading(false)
     }
@@ -181,6 +302,9 @@ export default function TenantRegistration() {
       if (res.data.devCode) {
         setDevCode(res.data.devCode)
         setOtp(res.data.devCode.split(''))
+      } else {
+        setDevCode(null)
+        setOtp(['', '', '', '', '', ''])
       }
       setResendTimer(60)
     } catch (err) {
@@ -247,66 +371,116 @@ export default function TenantRegistration() {
                     <Field label="Restaurant Name" icon="🏪" error={errors.restaurant_name}>
                       <input type="text" required value={form.restaurant_name}
                         onChange={e => handleNameChange(e.target.value)}
-                        className={inputCls} placeholder="e.g. Addis Bistro" />
+                        onBlur={() => handleBlur('restaurant_name')}
+                        className={inputCls(errors.restaurant_name, touched.restaurant_name && !errors.restaurant_name && form.restaurant_name)}
+                        placeholder="e.g. Addis Bistro" />
                     </Field>
 
-                    <Field label="Your Public URL" icon="🔗" error={errors.slug}>
+                    <Field label="Your Public URL" icon="🔗" error={errors.slug}
+                      hint={slugStatus === 'available' ? '✅ URL is available!' : slugStatus === 'checking' ? '⏳ Checking availability…' : ''}>
                       <div className="flex">
                         <span className="px-3.5 py-3.5 bg-slate-700/60 border border-r-0 border-slate-700 rounded-l-xl text-xs text-slate-400 font-mono whitespace-nowrap flex items-center">
                           /r/
                         </span>
-                        <input type="text" required value={form.slug}
-                          onChange={e => setForm(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') }))}
-                          className={`${inputCls} rounded-l-none`} placeholder="addis-bistro" />
+                        <div className="relative flex-1">
+                          <input type="text" required value={form.slug}
+                            onChange={e => {
+                              const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+                              handleChange('slug', val)
+                              checkSlugAvailability(val)
+                            }}
+                            onBlur={() => handleBlur('slug')}
+                            className={`${inputCls(errors.slug, slugStatus === 'available')} rounded-l-none pr-10`}
+                            placeholder="addis-bistro" />
+                          {/* Status icon */}
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-base pointer-events-none">
+                            {slugStatus === 'checking'  && <span className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />}
+                            {slugStatus === 'available' && <span className="text-emerald-400">✓</span>}
+                            {slugStatus === 'taken'     && <span className="text-red-400">✗</span>}
+                          </span>
+                        </div>
                       </div>
-                      {form.slug && <p className="text-[11px] text-slate-500 mt-1 ml-1">URL: <span className="text-amber-400">/r/{form.slug}/menu</span></p>}
+                      {form.slug && (
+                        <p className="text-[11px] text-slate-500 mt-1 ml-1">
+                          URL: <span className={slugStatus === 'available' ? 'text-emerald-400' : slugStatus === 'taken' ? 'text-red-400' : 'text-amber-400'}>
+                            /r/{form.slug}/menu
+                          </span>
+                        </p>
+                      )}
                     </Field>
 
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="Owner Name" icon="👤" error={errors.admin_name}>
                         <input type="text" required value={form.admin_name}
-                          onChange={e => setForm(p => ({ ...p, admin_name: e.target.value }))}
-                          className={inputCls} placeholder="Abebe Bikila" />
+                          onChange={e => handleChange('admin_name', e.target.value)}
+                          onBlur={() => handleBlur('admin_name')}
+                          className={inputCls(errors.admin_name, touched.admin_name && !errors.admin_name && form.admin_name)}
+                          placeholder="Abebe Bikila" />
                       </Field>
-                      <Field label="Phone" icon="📱">
+                      <Field label="Phone" icon="📱" error={errors.phone}>
                         <input type="text" value={form.phone}
-                          onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
-                          className={inputCls} placeholder="+251 911 000 000" />
+                          onChange={e => handleChange('phone', e.target.value)}
+                          onBlur={() => handleBlur('phone')}
+                          className={inputCls(errors.phone, touched.phone && !errors.phone && form.phone)}
+                          placeholder="+251 911 000 000" />
                       </Field>
                     </div>
 
                     <Field label="Email Address" icon="✉️" error={errors.email}>
                       <input type="email" required value={form.email}
-                        onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                        className={inputCls} placeholder="owner@restaurant.com" />
+                        onChange={e => handleChange('email', e.target.value)}
+                        onBlur={() => handleBlur('email')}
+                        className={inputCls(errors.email, touched.email && !errors.email && form.email)}
+                        placeholder="owner@restaurant.com" />
                     </Field>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="TIN Number" icon="🪪">
+                      <Field label="TIN Number" icon="🪪" error={errors.tin_number}
+                        hint={!errors.tin_number && form.tin_number && /^\d{10}$/.test(form.tin_number) ? '✅ Valid TIN' : !errors.tin_number && !form.tin_number ? 'Optional — 10 digits' : ''}>
                         <input type="text" value={form.tin_number}
-                          onChange={e => setForm(p => ({ ...p, tin_number: e.target.value }))}
-                          className={inputCls} placeholder="0012345678" />
+                          onChange={e => handleChange('tin_number', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          onBlur={() => handleBlur('tin_number')}
+                          className={inputCls(errors.tin_number, !errors.tin_number && form.tin_number && /^\d{10}$/.test(form.tin_number))}
+                          placeholder="0012345678"
+                          maxLength={10}
+                          inputMode="numeric" />
                       </Field>
                       <Field label="Location" icon="📍">
                         <input type="text" value={form.address}
                           onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-                          className={inputCls} placeholder="Bole Road, Addis Ababa" />
+                          className={inputCls(false, false)}
+                          placeholder="Bole Road, Addis Ababa" />
                       </Field>
                     </div>
 
                     <Field label="Password" icon="🔒" error={errors.password}>
                       <div className="relative">
                         <input type={showPass ? 'text' : 'password'} required value={form.password}
-                          onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                          className={`${inputCls} pr-12`} placeholder="Min. 6 characters" />
+                          onChange={e => handleChange('password', e.target.value)}
+                          onBlur={() => handleBlur('password')}
+                          className={`${inputCls(errors.password, touched.password && !errors.password && form.password)} pr-12`}
+                          placeholder="Min. 6 characters" />
                         <button type="button" onClick={() => setShowPass(s => !s)}
                           className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors text-lg">
                           {showPass ? '🙈' : '👁️'}
                         </button>
                       </div>
+                      {/* Password strength bar */}
+                      {form.password && (
+                        <div className="mt-2">
+                          <div className="flex gap-1 mb-1">
+                            {[1,2,3,4,5].map(i => (
+                              <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= passwordStrength.score ? passwordStrength.color : 'bg-slate-700'}`} />
+                            ))}
+                          </div>
+                          <p className={`text-[11px] ${passwordStrength.score <= 1 ? 'text-red-400' : passwordStrength.score <= 2 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                            {passwordStrength.label}
+                          </p>
+                        </div>
+                      )}
                     </Field>
 
-                    <button type="submit" disabled={loading}
+                    <button type="submit" disabled={loading || slugStatus === 'checking' || slugStatus === 'taken'}
                       className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-50 text-slate-950 font-black text-base rounded-2xl transition-all shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2 mt-2">
                       {loading
                         ? <><span className="w-5 h-5 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin" /> Sending verification code…</>
@@ -343,24 +517,34 @@ export default function TenantRegistration() {
                     </p>
                   </div>
 
-                  {/* Fallback: show OTP in UI when SMTP is not configured on server */}
-                  {devCode && (
+                  {/* Info box — only shown when email failed (devCode set) */}
+                  {devCode ? (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                      className="mb-5 p-4 bg-amber-500/10 border border-amber-500/40 rounded-xl">
+                      className="mb-5 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
                       <div className="flex items-start gap-3">
                         <span className="text-2xl flex-shrink-0">⚠️</span>
                         <div className="flex-1">
-                          <p className="text-amber-400 text-xs font-bold uppercase tracking-wide mb-1">Email delivery unavailable</p>
+                          <p className="text-red-400 text-xs font-bold uppercase tracking-wide mb-1">Email could not be delivered</p>
                           <p className="text-slate-300 text-xs leading-relaxed mb-3">
-                            The email server is not configured yet so the code couldn't be sent to your inbox.
-                            Use the code below to continue — it works exactly the same.
+                            We couldn't send the email to your inbox. Use this code instead — it works exactly the same.
                           </p>
-                          <div className="bg-slate-950 border border-amber-500/50 rounded-lg px-4 py-3 text-center">
+                          <div className="bg-slate-950 border border-red-500/40 rounded-lg px-4 py-3 text-center">
                             <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Your verification code</p>
-                            <p className="text-amber-400 text-2xl font-black font-mono tracking-[0.3em]">{devCode}</p>
+                            <p className="text-red-400 text-2xl font-black font-mono tracking-[0.3em]">{devCode}</p>
                             <p className="text-slate-500 text-[10px] mt-1">Already filled in for you ↓</p>
                           </div>
                         </div>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                      className="mb-5 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-3">
+                      <span className="text-xl flex-shrink-0">📬</span>
+                      <div>
+                        <p className="text-emerald-400 text-xs font-bold mb-0.5">Email sent successfully!</p>
+                        <p className="text-slate-400 text-xs leading-relaxed">
+                          Check your inbox and <span className="text-amber-400 font-semibold">Spam / Promotions</span> folder. The code expires in <span className="text-amber-400 font-bold">10 minutes</span>.
+                        </p>
                       </div>
                     </motion.div>
                   )}

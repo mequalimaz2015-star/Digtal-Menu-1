@@ -14,7 +14,7 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('general')
 
   const [form, setForm] = useState({
-    name: info.name || 'ABC Restaurant',
+    name: info.name || 'MEGA Digital Menu',
     nameAm: info.nameAm || 'ኤቢሲ ምግብ ቤት',
     tagline: info.tagline || 'Fine Dining & Fast Delivery',
     address: info.address || 'Bole Road, Addis Ababa, Ethiopia',

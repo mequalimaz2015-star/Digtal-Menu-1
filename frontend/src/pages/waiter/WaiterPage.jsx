@@ -50,9 +50,18 @@ function WaiterLogin({ onLogin }) {
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    fetch(`${API}/users/waiters`)
+    // Read tenant slug from sessionStorage (set when customer browses /r/:slug/menu)
+    // or from localStorage (set at admin login)
+    const tenantSlug =
+      sessionStorage.getItem('tenant_slug') ||
+      localStorage.getItem('tenant_slug') ||
+      'abc-restaurant'
+
+    const headers = { 'X-Tenant-Slug': tenantSlug }
+
+    fetch(`${API}/users/waiters`, { headers })
       .then(r => r.ok ? r.json() : [])
-      .then(data => { setWaiters(data); setLoading(false) })
+      .then(data => { setWaiters(Array.isArray(data) ? data : []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 
@@ -136,16 +145,18 @@ function WaiterDashboard({ waiter, onLogout }) {
 
   // Resolve a call
   const resolve = useCallback(async (id) => {
+    const tenantSlug = sessionStorage.getItem('tenant_slug') || localStorage.getItem('tenant_slug') || 'abc-restaurant'
     try {
-      await fetch(`${API}/waiter-calls/${id}/resolve`, { method: 'PUT' })
+      await fetch(`${API}/waiter-calls/${id}/resolve`, { method: 'PUT', headers: { 'X-Tenant-Slug': tenantSlug } })
       setCalls(prev => prev.filter(c => c.id !== id))
     } catch (_) {}
   }, [])
 
   // Fetch all pending calls for this waiter on mount
   const fetchMyCalls = useCallback(async () => {
+    const tenantSlug = sessionStorage.getItem('tenant_slug') || localStorage.getItem('tenant_slug') || 'abc-restaurant'
     try {
-      const res = await fetch(`${API}/waiter-calls`)
+      const res = await fetch(`${API}/waiter-calls`, { headers: { 'X-Tenant-Slug': tenantSlug } })
       if (!res.ok) return
       const all = await res.json()
       // Show calls: (a) targeted to this waiter, or (b) not targeted to anyone (broadcast)

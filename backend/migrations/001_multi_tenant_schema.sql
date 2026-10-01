@@ -143,6 +143,12 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS session_id VARCHAR(100);
 -- menu_item_ref: human-readable item ID derived from restaurant name, e.g. B-001 for "Bloom"
 ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS menu_item_ref VARCHAR(30);
 
+-- tin_number: Ethiopian Tax Identification Number for tenant (10 digits, unique)
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tin_number VARCHAR(20);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS address VARCHAR(500);
+-- Add unique index on tin_number (only for non-null values)
+CREATE UNIQUE INDEX IF NOT EXISTS tenants_tin_number_unique ON tenants (tin_number) WHERE tin_number IS NOT NULL;
+
 -- REVIEWS TABLE
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE;
 

@@ -533,7 +533,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
                   Import More
                 </button>
                 <button
-                  onClick={onClose}
+                  onClick={() => { if (onImported) onImported(); onClose() }}
                   className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-sm rounded-xl transition-colors"
                 >
                   Done

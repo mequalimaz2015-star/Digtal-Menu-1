@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiImage, FiX, FiSave, FiDownload, FiUpload, FiZap } from 'react-icons/fi'
 import { BsFire, BsLeaf } from 'react-icons/bs'
@@ -16,7 +16,7 @@ const emptyForm = {
 }
 
 export default function MenuItems() {
-  const { menuItems, categories, addMenuItem, updateMenuItem, deleteMenuItem, toggleAvailable } = useMenuStore()
+  const { menuItems, categories, addMenuItem, updateMenuItem, deleteMenuItem, toggleAvailable, fetchAll } = useMenuStore()
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('all')
   const [showModal, setShowModal] = useState(false)
@@ -24,6 +24,9 @@ export default function MenuItems() {
   const [showAIImport, setShowAIImport] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
+
+  // Always fetch fresh data when this page mounts so menu_item_ref is up to date
+  useEffect(() => { fetchAll() }, [fetchAll])
   const fileInputRef = useRef(null)
 
   const handleExport = () => {
@@ -323,7 +326,7 @@ export default function MenuItems() {
             onClose={() => setShowAIImport(false)}
             onImported={() => {
               // Re-fetch menu items after bulk import
-              try { useMenuStore.getState().fetchMenu() } catch (_) {}
+              try { useMenuStore.getState().fetchAll() } catch (_) {}
             }}
           />
         )}

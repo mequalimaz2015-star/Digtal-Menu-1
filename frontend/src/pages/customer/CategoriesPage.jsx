@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { FiArrowLeft, FiChevronRight } from 'react-icons/fi'
+import { FiArrowLeft, FiChevronRight, FiRefreshCw, FiAlertCircle } from 'react-icons/fi'
 import { useMenuStore } from '../../store/useMenuStore'
 import MenuItemCard from '../../components/customer/MenuItemCard'
 import ItemDetailDrawer from '../../components/customer/ItemDetailDrawer'
@@ -14,15 +14,28 @@ export default function CategoriesPage() {
   const navigate = useNavigate()
   const params = useParams()
   const tenantSlug = params.tenantSlug || null
-  const { categories, menuItems, fetchCustomerMenu } = useMenuStore()
+  const { categories, menuItems, fetchCustomerMenu, _hydrated } = useMenuStore()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [view] = useState('grid')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const loadMenu = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      await fetchCustomerMenu(tenantSlug)
+    } catch (err) {
+      setError('Failed to load menu. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    fetchCustomerMenu(tenantSlug)
-  }, [tenantSlug, fetchCustomerMenu])
-
+    loadMenu()
+  }, [tenantSlug])
 
   const activeCategories = useMemo(() =>
     categories.filter(c => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -37,6 +50,53 @@ export default function CategoriesPage() {
     )
   }, [selectedCat, menuItems])
 
+  // Loading state
+  if (loading && !_hydrated) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24 flex flex-col">
+        <div className="sticky top-0 z-30 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
+          <div className="max-w-2xl mx-auto px-4 flex items-center gap-3 h-14">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-1">🍽️ Categories</h1>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">Loading categories...</p>
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    )
+  }
+
+  // Error state
+  if (error && activeCategories.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24 flex flex-col">
+        <div className="sticky top-0 z-30 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
+          <div className="max-w-2xl mx-auto px-4 flex items-center gap-3 h-14">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-1">🍽️ Categories</h1>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="text-center">
+            <FiAlertCircle className="text-red-400 mx-auto mb-3" size={48} />
+            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">{error}</p>
+            <button
+              onClick={loadMenu}
+              className="mt-4 flex items-center gap-2 mx-auto px-5 py-2.5 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition"
+            >
+              <FiRefreshCw size={16} />
+              Retry
+            </button>
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    )
+  }
+
   // Full category grid view
   if (!selectedCat) {
     return (
@@ -50,59 +110,87 @@ export default function CategoriesPage() {
             <span className="text-sm text-gray-500 dark:text-gray-400">
               {activeCategories.length} categories
             </span>
+            {/* Refresh button */}
+            <button
+              onClick={loadMenu}
+              disabled={loading}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30 transition disabled:opacity-40"
+              title="Refresh"
+            >
+              <FiRefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
         </div>
 
         <div className="max-w-2xl mx-auto px-4 py-5">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {activeCategories.map((cat, idx) => {
-              const count = menuItems.filter(i =>
-                (i.categoryId === cat.id || String(i.categoryId) === String(cat.id)) && i.isAvailable
-              ).length
+          {activeCategories.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-20"
+            >
+              <p className="text-5xl mb-4">🍽️</p>
+              <p className="font-semibold text-gray-600 dark:text-gray-300 mb-1">No categories yet</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">Check back later for updates</p>
+              <button
+                onClick={loadMenu}
+                className="mt-4 flex items-center gap-2 mx-auto px-5 py-2.5 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition"
+              >
+                <FiRefreshCw size={16} />
+                Refresh
+              </button>
+            </motion.div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {activeCategories.map((cat, idx) => {
+                const count = menuItems.filter(i =>
+                  (i.categoryId === cat.id || String(i.categoryId) === String(cat.id)) && i.isAvailable
+                ).length
 
-              return (
-                <motion.button
-                  key={cat.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.04 }}
-                  whileHover={{ y: -4, scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => setSelectedCat(cat)}
-                  className="relative overflow-hidden rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 dark:border-gray-700"
-                  style={{ background: `linear-gradient(135deg, ${cat.color}20, ${cat.color}40)` }}
-                >
-                  {/* Background pattern */}
-                  <div className="absolute -right-4 -bottom-4 text-8xl opacity-15">
-                    {cat.icon}
-                  </div>
-
-                  <div className="relative p-5 text-left">
-                    <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-3 shadow-sm"
-                      style={{ backgroundColor: cat.color + '30' }}
-                    >
+                return (
+                  <motion.button
+                    key={cat.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.04 }}
+                    whileHover={{ y: -4, scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setSelectedCat(cat)}
+                    className="relative overflow-hidden rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 dark:border-gray-700"
+                    style={{ background: `linear-gradient(135deg, ${cat.color}20, ${cat.color}40)` }}
+                  >
+                    {/* Background pattern */}
+                    <div className="absolute -right-4 -bottom-4 text-8xl opacity-15">
                       {cat.icon}
                     </div>
-                    <h3 className="font-bold text-gray-900 dark:text-white text-base leading-tight">
-                      {language === 'am' ? cat.nameAm : cat.name}
-                    </h3>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {count} {count === 1 ? 'item' : 'items'}
-                      </p>
+
+                    <div className="relative p-5 text-left">
                       <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: cat.color }}
+                        className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-3 shadow-sm"
+                        style={{ backgroundColor: cat.color + '30' }}
                       >
-                        <FiChevronRight size={13} className="text-white" />
+                        {cat.icon}
+                      </div>
+                      <h3 className="font-bold text-gray-900 dark:text-white text-base leading-tight">
+                        {language === 'am' ? cat.nameAm : cat.name}
+                      </h3>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {count} {count === 1 ? 'item' : 'items'}
+                        </p>
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: cat.color }}
+                        >
+                          <FiChevronRight size={13} className="text-white" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.button>
-              )
-            })}
-          </div>
+                  </motion.button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <BottomNav />

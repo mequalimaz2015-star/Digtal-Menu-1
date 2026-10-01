@@ -48,31 +48,113 @@ router.get('/public/:slug', async (req, res) => {
   }
 })
 
+// GET /api/tenants/check-slug?slug=xxx  — real-time slug availability check
+router.get('/check-slug', async (req, res) => {
+  try {
+    const raw = (req.query.slug || '').trim()
+    const cleanSlug = raw.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+
+    if (!cleanSlug || cleanSlug.length < 3) {
+      return res.json({ available: false, reason: 'Slug must be at least 3 characters' })
+    }
+    if (cleanSlug.length > 50) {
+      return res.json({ available: false, reason: 'Slug must be 50 characters or less' })
+    }
+    if (/^-|-$/.test(raw) || /--/.test(raw)) {
+      return res.json({ available: false, reason: 'Slug cannot start/end with or contain consecutive hyphens' })
+    }
+
+    const reserved = ['admin', 'api', 'superadmin', 'app', 'login', 'register', 'menu', 'r', 'www', 'help', 'support']
+    if (reserved.includes(cleanSlug)) {
+      return res.json({ available: false, reason: `"${cleanSlug}" is a reserved word` })
+    }
+
+    try {
+      const result = await query('SELECT id FROM tenants WHERE slug = $1', [cleanSlug])
+      return res.json({ available: result.rows.length === 0, slug: cleanSlug })
+    } catch (_) {
+      return res.json({ available: true, slug: cleanSlug }) // DB offline → optimistic
+    }
+  } catch (err) {
+    res.status(500).json({ available: false, reason: 'Check failed' })
+  }
+})
+
 // POST /api/tenants/register - Restaurant owner self-registration
 router.post('/register', async (req, res) => {
   try {
-    const { restaurant_name, slug, admin_name, email, phone, password } = req.body
+    const { restaurant_name, slug, admin_name, email, phone, password, tin_number, address } = req.body
 
     if (!restaurant_name || !slug || !email || !password) {
       return res.status(400).json({ error: 'Restaurant name, slug, email, and password are required' })
     }
 
-    const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+    // ── Validate email format ──────────────────────────────────────────────
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Invalid email address format', field: 'email' })
+    }
+
+    // ── Validate password ──────────────────────────────────────────────────
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters', field: 'password' })
+    }
+
+    // ── Validate TIN format (10 digits, optional but if provided must be valid) ──
+    const cleanTin = tin_number ? String(tin_number).trim().replace(/\s/g, '') : ''
+    if (cleanTin && !/^\d{10}$/.test(cleanTin)) {
+      return res.status(400).json({ error: 'TIN number must be exactly 10 digits', field: 'tin_number' })
+    }
+
+    const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+
+    if (cleanSlug.length < 3) {
+      return res.status(400).json({ error: 'URL slug must be at least 3 characters', field: 'slug' })
+    }
+
+    const reserved = ['admin', 'api', 'superadmin', 'app', 'login', 'register', 'menu', 'r', 'www', 'help', 'support']
+    if (reserved.includes(cleanSlug)) {
+      return res.status(400).json({ error: `"${cleanSlug}" is a reserved word and cannot be used as a URL`, field: 'slug' })
+    }
 
     try {
+      // ── Duplicate slug check ───────────────────────────────────────────
       const checkSlug = await query('SELECT id FROM tenants WHERE slug = $1', [cleanSlug])
       if (checkSlug.rows.length > 0) {
-        return res.status(400).json({ error: 'Restaurant slug already taken. Please choose a different URL slug.' })
+        return res.status(409).json({ error: 'This URL is already taken. Please choose a different one.', field: 'slug' })
+      }
+
+      // ── Duplicate email check (across users table) ─────────────────────
+      const checkEmail = await query('SELECT id FROM users WHERE LOWER(email) = $1', [email.toLowerCase()])
+      if (checkEmail.rows.length > 0) {
+        return res.status(409).json({ error: 'An account with this email already exists. Try signing in instead.', field: 'email' })
+      }
+
+      // ── Duplicate TIN check ────────────────────────────────────────────
+      if (cleanTin) {
+        // Ensure the column exists before querying (graceful if migration not run yet)
+        try {
+          const checkTin = await query('SELECT id FROM tenants WHERE tin_number = $1', [cleanTin])
+          if (checkTin.rows.length > 0) {
+            return res.status(409).json({ error: 'A restaurant with this TIN number is already registered.', field: 'tin_number' })
+          }
+        } catch (tinErr) {
+          // Column may not exist yet — add it on the fly and continue
+          try {
+            await query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tin_number VARCHAR(20) UNIQUE')
+          } catch (_) {}
+        }
       }
 
       const trialEndsAt = new Date()
       trialEndsAt.setDate(trialEndsAt.getDate() + 14)
+      // Format as ISO string for SQL Server compatibility (DATETIME column)
+      const trialEndsAtStr = trialEndsAt.toISOString().slice(0, 19).replace('T', ' ')
 
       // ── Step 1: insert tenant (no RETURNING — avoids MySQL emulation bugs) ──
       const tenantInsert = await query(`
-        INSERT INTO tenants (name, slug, email, phone, status, subscription_plan_id, subscription_status, trial_ends_at)
-        VALUES ($1, $2, $3, $4, 'active', 1, 'trialing', $5)
-      `, [restaurant_name, cleanSlug, email, phone || null, trialEndsAt])
+        INSERT INTO tenants (name, slug, email, phone, address, tin_number, status, subscription_plan_id, subscription_status, trial_ends_at)
+        VALUES ($1, $2, $3, $4, $5, $6, 'active', 1, 'trialing', $7)
+      `, [restaurant_name, cleanSlug, email, phone || null, address || null, cleanTin || null, trialEndsAtStr])
 
       // Resolve tenant id via insertId (MySQL) or SELECT fallback
       let tenantId = tenantInsert.insertId ? Number(tenantInsert.insertId) : null

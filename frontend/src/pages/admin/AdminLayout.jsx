@@ -154,7 +154,7 @@ export default function AdminLayout() {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="font-black text-gray-900 dark:text-white text-sm leading-tight truncate">
-              {info.name || 'ABC Restaurant'}
+              {info.name || 'MEGA Digital Menu'}
             </h1>
             <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full mt-0.5 ${badge.cls}`}>
               {badge.icon} {badge.label}

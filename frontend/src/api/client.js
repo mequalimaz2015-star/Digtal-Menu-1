@@ -62,12 +62,22 @@ client.interceptors.response.use(
       if (window.location.pathname.startsWith('/superadmin')) {
         localStorage.removeItem('superadmin_token')
         localStorage.removeItem('superadmin_user')
+        localStorage.removeItem('token')
+        localStorage.removeItem('admin-user')
+        localStorage.removeItem('user')
         if (window.location.pathname !== '/superadmin/login') {
           window.location.href = '/superadmin/login'
         }
       } else if (window.location.pathname.startsWith('/admin')) {
+        const slug = localStorage.getItem('tenant_slug') || 'default'
         localStorage.removeItem('token')
+        localStorage.removeItem('admin-user')
         localStorage.removeItem('user')
+        localStorage.removeItem(`menu-store-${slug}`)
+        localStorage.removeItem('menu-store')
+        localStorage.removeItem(`restaurant-store-${slug}`)
+        localStorage.removeItem('restaurant-store')
+        localStorage.removeItem('tenant_slug')
         if (window.location.pathname !== '/admin/login') {
           window.location.href = '/admin/login'
         }

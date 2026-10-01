@@ -79,8 +79,8 @@ export default function ChatWidget() {
   useEffect(() => {
     const name = sessionStorage.getItem('chat_customer_name') || customerName
     const greeting = name
-      ? `👋 Hi **${name}**! Welcome to **ABC Restaurant**.\n\nHow can I help you today?`
-      : `👋 Hi! Welcome to **ABC Restaurant**! I'm your virtual assistant.\n\nHow can I help you today?`
+      ? `👋 Hi **${name}**! Welcome to **MEGA Digital Menu**.\n\nHow can I help you today?`
+      : `👋 Hi! Welcome to **MEGA Digital Menu**! I'm your virtual assistant.\n\nHow can I help you today?`
 
     setMessages([{
       role: 'bot',
@@ -215,7 +215,7 @@ export default function ChatWidget() {
                 <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-orange-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-black text-white text-sm">ABC Restaurant</p>
+                <p className="font-black text-white text-sm">MEGA Digital Menu</p>
                 <div className="flex items-center gap-1 flex-wrap">
                   <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.5, repeat: Infinity }}
                     className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0" />
@@ -263,7 +263,7 @@ export default function ChatWidget() {
                               sessionStorage.setItem('chat_customer_name', n)
                               setMessages(prev => [{
                                 ...prev[0],
-                                text: `👋 Hi **${n}**! Welcome to **ABC Restaurant**.\n\nHow can I help you today?`,
+                                text: `👋 Hi **${n}**! Welcome to **MEGA Digital Menu**.\n\nHow can I help you today?`,
                               }, ...prev.slice(1)])
                             }
                             setShowNamePrompt(false)

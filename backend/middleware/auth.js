@@ -7,15 +7,16 @@ function requireAuth(req, res, next) {
 
   const token = auth.split(' ')[1]
 
-  // Allow demo token for offline/testing fallback
-  if (token === 'demo-admin-token') {
-    req.user = { id: 1, email: 'admin@abc.com', role: 'admin', tenant_id: 1 }
-    return next()
-  }
-
-  if (token === 'demo-superadmin-token') {
-    req.user = { id: 2, email: 'superadmin@platform.com', role: 'super_admin', tenant_id: null }
-    return next()
+  // Demo tokens only allowed in non-production environments
+  if (process.env.NODE_ENV !== 'production') {
+    if (token === 'demo-admin-token') {
+      req.user = { id: 1, email: 'admin@abc.com', role: 'admin', tenant_id: 1 }
+      return next()
+    }
+    if (token === 'demo-superadmin-token') {
+      req.user = { id: 2, email: 'superadmin@platform.com', role: 'super_admin', tenant_id: null }
+      return next()
+    }
   }
 
   try {

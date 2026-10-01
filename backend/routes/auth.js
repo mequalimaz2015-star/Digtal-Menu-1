@@ -61,10 +61,13 @@ router.post('/login', async (req, res) => {
         `SELECT u.*, t.slug as tenant_slug, t.name as tenant_name, t.status as tenant_status
          FROM users u
          LEFT JOIN tenants t ON u.tenant_id = t.id
-         WHERE LOWER(u.email) = $1 AND (u.is_active = true OR u.is_active IS NULL)`,
+         WHERE LOWER(u.email) = $1 AND (u.is_active = 1 OR u.is_active = 0 OR u.is_active IS NULL)`,
         [cleanEmail]
       )
-      user = result.rows[0]
+      // Pick the active user — is_active can be true/1 or the column may not enforce it
+      const rows = result.rows || []
+      user = rows.find(r => r.is_active === true || r.is_active === 1 || r.is_active == null)
+         || rows[0] // fallback: take first row if none explicitly active
     } catch (dbErr) {
       console.warn('DB unavailable during login, trying fallback store:', dbErr.message)
     }
@@ -100,15 +103,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    // Check credentials with bcrypt, and allow direct default fallback passwords
-    let valid = false
-    if (cleanEmail === 'superadmin@platform.com' && (password === 'superadmin123' || password === 'admin123')) {
-      valid = true
-    } else if (cleanEmail === 'admin@abc.com' && password === 'admin123') {
-      valid = true
-    } else {
-      valid = await bcrypt.compare(password, user.password).catch(() => false)
-    }
+    // Verify password with bcrypt only — no plaintext bypasses
+    const valid = await bcrypt.compare(password, user.password).catch(() => false)
 
     if (!valid) {
       local.logActivity({
@@ -230,24 +226,28 @@ router.post('/send-otp', async (req, res) => {
       sendCount: (existing?.sendCount || 0) + 1,
     })
 
-    // Send email (async — don't block response)
+    // Send email
     const emailResult = await sendEmail({
       to:      cleanEmail,
-      subject: `${otp} — Your MEGA Digital Menu verification code`,
+      subject: `Verify your email — MEGA Digital Menu`,
       html:    otpEmailHtml(otp, restaurantName),
-      text:    `Your MEGA Digital Menu verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
+      text:    `Your MEGA Digital Menu verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, please ignore this email.`,
     })
 
     const smtpConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS)
-    console.log(`📧 OTP sent to ${cleanEmail}: ${otp} (${emailResult.ok ? 'delivered' : 'email failed - check SMTP config'})`)
+    console.log(`📧 OTP to ${cleanEmail}: ${otp} — email ${emailResult.ok ? '✅ delivered' : '❌ failed: ' + emailResult.error}`)
     if (emailResult.preview) console.log('   Preview (Ethereal):', emailResult.preview)
-    if (!smtpConfigured) console.warn('⚠️  SMTP not configured — OTP not delivered to real email. Set SMTP_USER and SMTP_PASS env vars.')
 
     res.json({
       ok: true,
-      message: `Verification code sent to ${cleanEmail}`,
-      // Always return devCode when SMTP is not configured so user can still register
-      ...(!smtpConfigured && { devCode: otp, smtpMissing: true }),
+      message: emailResult.ok
+        ? `Verification code sent to ${cleanEmail}`
+        : `Could not send email — use the code shown on screen`,
+      emailDelivered: emailResult.ok,
+      // Only expose devCode when email actually failed OR SMTP not configured
+      // Never show it when email was successfully delivered (security)
+      ...(!emailResult.ok && { devCode: otp }),
+      ...(!smtpConfigured && { smtpMissing: true }),
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -272,8 +272,10 @@ router.post('/verify-otp', (req, res) => {
     return res.status(400).json({ error: 'Incorrect verification code. Please try again.' })
   }
 
-  // Mark as verified (don't delete immediately — registration call might come seconds later)
+  // Mark as verified and schedule cleanup in 2 minutes
+  // (gives the /tenants/register call time to complete)
   record.verified = true
+  setTimeout(() => otpStore.delete(cleanEmail), 2 * 60 * 1000)
   res.json({ ok: true, message: 'Email verified successfully!' })
 })
 

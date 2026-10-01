@@ -20,7 +20,7 @@ export default function PickupTicket({
   open, onClose,
   pickupNumber, pickupTime, orderId,
   customerName, items = [], grandTotal,
-  restaurantName = 'ABC Restaurant',
+  restaurantName = 'MEGA Digital Menu',
   deliveryAddress,
 }) {
   const ticketRef = useRef(null)

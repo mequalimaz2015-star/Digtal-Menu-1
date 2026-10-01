@@ -22,11 +22,14 @@ export default function AdminGuard({ children }) {
 
   // Not logged in or expired token — clear all auth state including tenant context
   if (!isTokenValid(token)) {
+    const slug = localStorage.getItem('tenant_slug') || 'default'
     localStorage.removeItem('token')
     localStorage.removeItem('admin-user')
-    const slug = localStorage.getItem('tenant_slug') || 'default'
+    localStorage.removeItem('user')
     localStorage.removeItem(`menu-store-${slug}`)
     localStorage.removeItem('menu-store')
+    localStorage.removeItem(`restaurant-store-${slug}`)
+    localStorage.removeItem('restaurant-store')
     localStorage.removeItem('tenant_slug')
     return <Navigate to="/admin/login" replace />
   }

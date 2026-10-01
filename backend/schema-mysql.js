@@ -124,6 +124,7 @@ async function initMySqlSchema(pool) {
       calories INT,
       discount DOUBLE DEFAULT 0,
       allergens VARCHAR(500),
+      menu_item_ref VARCHAR(30),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
@@ -305,6 +306,16 @@ async function initMySqlSchema(pool) {
       column: 'session_id',
       definition: 'VARCHAR(100) NULL',
     },
+    {
+      table: 'menu_items',
+      column: 'menu_item_ref',
+      definition: 'VARCHAR(30) NULL',
+    },
+    {
+      table: 'tenants',
+      column: 'tin_number',
+      definition: 'VARCHAR(20) NULL',
+    },
   ]
 
   for (const { table, column, definition } of columnMigrations) {
@@ -444,12 +455,12 @@ async function seedMySqlDefaults(pool) {
       for (const c of catRows) catMap[c.name] = c.id
 
       await pool.query(`
-        INSERT INTO menu_items (tenant_id, category_id, name, name_am, description, price, image_url, prep_time, is_available, is_featured, is_popular, is_best_seller, chef_recommended, rating, review_count, calories) VALUES
-          (1, ?, 'Five Stop Burger', 'ፋይቭ ስቶፕ በርገር', 'Double beef patty, special sauce, melted cheese.', 1135, 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=400&q=80', 15, 1, 1, 1, 1, 1, 4.9, 421, 850),
-          (1, ?, 'Margherita Pizza', 'ማርጌሪታ ፒዛ', 'Classic tomato, mozzarella, fresh basil.', 1300, 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400&q=80', 18, 1, 1, 1, 1, 0, 4.8, 156, 680),
-          (1, ?, 'Special Breakfast', 'ልዩ ቁርስ', 'Full breakfast platter with eggs, fresh bread, and beans.', 957, 'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=400&q=80', 15, 1, 1, 1, 1, 1, 4.9, 112, 780),
-          (1, ?, 'Chicken Gyro', 'ዶሮ ጂሮ', 'Marinated grilled chicken with tzatziki in warm pita.', 1296, 'https://images.unsplash.com/photo-1512852939750-1305098529bf?w=400&q=80', 14, 1, 1, 1, 1, 0, 4.8, 178, 620),
-          (1, ?, 'Soft Drink', 'ለስላሳ', 'Chilled Coke, Sprite, or Fanta.', 130, 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400&q=80', 2, 1, 0, 1, 0, 0, 4.4, 178, 140)
+        INSERT INTO menu_items (tenant_id, category_id, name, name_am, description, price, image_url, prep_time, is_available, is_featured, is_popular, is_best_seller, chef_recommended, rating, review_count, calories, menu_item_ref) VALUES
+          (1, ?, 'Five Stop Burger', 'ፋይቭ ስቶፕ በርገር', 'Double beef patty, special sauce, melted cheese.', 1135, 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=400&q=80', 15, 1, 1, 1, 1, 1, 4.9, 421, 850, 'ABC-001'),
+          (1, ?, 'Margherita Pizza', 'ማርጌሪታ ፒዛ', 'Classic tomato, mozzarella, fresh basil.', 1300, 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=400&q=80', 18, 1, 1, 1, 1, 0, 4.8, 156, 680, 'ABC-002'),
+          (1, ?, 'Special Breakfast', 'ልዩ ቁርስ', 'Full breakfast platter with eggs, fresh bread, and beans.', 957, 'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=400&q=80', 15, 1, 1, 1, 1, 1, 4.9, 112, 780, 'ABC-003'),
+          (1, ?, 'Chicken Gyro', 'ዶሮ ጂሮ', 'Marinated grilled chicken with tzatziki in warm pita.', 1296, 'https://images.unsplash.com/photo-1512852939750-1305098529bf?w=400&q=80', 14, 1, 1, 1, 1, 0, 4.8, 178, 620, 'ABC-004'),
+          (1, ?, 'Soft Drink', 'ለስላሳ', 'Chilled Coke, Sprite, or Fanta.', 130, 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400&q=80', 2, 1, 0, 1, 0, 0, 4.4, 178, 140, 'ABC-005')
       `, [
         catMap['Burger'] || null,
         catMap['Pizza'] || null,
@@ -457,6 +468,56 @@ async function seedMySqlDefaults(pool) {
         catMap['Lunch'] || null,
         catMap['Drinks'] || null
       ])
+    }
+    // 10. Backfill menu_item_ref for any items that are missing it
+    try {
+      const [missingRefs] = await pool.query(
+        `SELECT mi.id, t.name as tenant_name, mi.tenant_id
+         FROM menu_items mi
+         JOIN tenants t ON t.id = mi.tenant_id
+         WHERE mi.menu_item_ref IS NULL OR mi.menu_item_ref = ''
+         ORDER BY mi.tenant_id, mi.id`
+      )
+      if (missingRefs.length > 0) {
+        // Group by tenant and assign sequential refs
+        const tenantCounters = {}
+        const tenantPrefixes = {}
+        for (const row of missingRefs) {
+          const tid = row.tenant_id
+          if (!tenantPrefixes[tid]) {
+            const tName = row.tenant_name || 'MENU'
+            tenantPrefixes[tid] = tName
+              .split(/\s+/)
+              .map(w => w.charAt(0).toUpperCase())
+              .join('')
+              .slice(0, 3)
+              .replace(/[^A-Z]/g, 'M') || 'M'
+            // Find highest existing ref number for this tenant
+            const [lastRef] = await pool.query(
+              `SELECT menu_item_ref FROM menu_items
+               WHERE tenant_id = ? AND menu_item_ref LIKE ?
+               ORDER BY menu_item_ref DESC LIMIT 1`,
+              [tid, `${tenantPrefixes[tid]}-%`]
+            )
+            if (lastRef.length > 0 && lastRef[0].menu_item_ref) {
+              const parts = lastRef[0].menu_item_ref.split('-')
+              tenantCounters[tid] = (parseInt(parts[parts.length - 1]) || 0) + 1
+            } else {
+              tenantCounters[tid] = 1
+            }
+          }
+          const prefix = tenantPrefixes[tid]
+          const ref = `${prefix}-${String(tenantCounters[tid]).padStart(3, '0')}`
+          await pool.query(
+            `UPDATE menu_items SET menu_item_ref = ? WHERE id = ?`,
+            [ref, row.id]
+          )
+          tenantCounters[tid]++
+        }
+        console.log(`✅ Backfilled menu_item_ref for ${missingRefs.length} items`)
+      }
+    } catch (backfillErr) {
+      console.warn('Notice: menu_item_ref backfill skipped:', backfillErr.message)
     }
   } catch (seedErr) {
     console.warn('Notice seeding MySQL defaults:', seedErr.message)

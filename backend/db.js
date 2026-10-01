@@ -2,18 +2,63 @@ const path = require('path')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
 // Auto-detect which DB driver to use based on environment variables
-const isMySQL = Boolean(
+const isSqlServer = Boolean(
+  process.env.DB_CONNECTION && process.env.DB_CONNECTION.toLowerCase() === 'sqlserver'
+)
+const isMySQL = !isSqlServer && Boolean(
   process.env.MYSQL_HOST ||
   (process.env.DB_CONNECTION && process.env.DB_CONNECTION.toLowerCase() === 'mysql') ||
   (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('mysql'))
 )
-const isPostgres = !isMySQL && Boolean(
+const isPostgres = !isSqlServer && !isMySQL && Boolean(
   process.env.DATABASE_URL ||
   process.env.PGHOST
 )
 let dbType = 'none'
 let mysqlPool = null
-let pgPool = null
+let pgPool    = null
+let mssqlPool = null   // SQL Server connection pool
+
+// ── SQL Server ───────────────────────────────────────────────────────────────
+if (isSqlServer) {
+  try {
+    const sql = require('mssql')
+    // Use 127.0.0.1 + port 1433 directly — more reliable than named instance
+    // on local machines where TCP/IP is enabled but named pipes may not resolve
+    const config = {
+      server:   '127.0.0.1',
+      database: process.env.MSSQL_DATABASE || 'digital_menu',
+      port:     parseInt(process.env.MSSQL_PORT || '1433', 10),
+      user:     process.env.MSSQL_USER     || 'sa',
+      password: process.env.MSSQL_PASSWORD || 'Digital@2024',
+      options: {
+        trustServerCertificate: true,
+        enableArithAbort:       true,
+      },
+      pool: { max: 10, min: 0, idleTimeoutMillis: 30000 },
+      connectionTimeout: 30000,
+      requestTimeout:    30000,
+    }
+    mssqlPool = new sql.ConnectionPool(config)
+    dbType = 'sqlserver'
+    mssqlPool.connect()
+      .then(async () => {
+        console.log('✅ Connected to SQL Server (digital_menu)')
+        try {
+          const { initSqlServerSchema, seedSqlServerDefaults } = require('./schema-sqlserver')
+          await initSqlServerSchema(mssqlPool)
+          await seedSqlServerDefaults(mssqlPool)
+          console.log('✅ SQL Server schema and seed data ready')
+        } catch (schemaErr) {
+          console.warn('⚠️ SQL Server schema init notice:', schemaErr.message)
+        }
+      })
+      .catch(err => console.error('❌ SQL Server connection failed:', err.message))
+    mssqlPool.on('error', err => console.error('❌ SQL Server pool error:', err.message))
+  } catch (err) {
+    console.error('❌ Failed to load mssql driver:', err.message)
+  }
+}
 
 // ── PostgreSQL ───────────────────────────────────────────────────────────────
 if (isPostgres) {
@@ -92,6 +137,119 @@ function toMySQL(sql, values = []) {
 
 // ── Universal query function ──────────────────────────────────────────────────
 async function query(text, values = []) {
+  // ── SQL Server path ──────────────────────────────────────────────────────
+  if (dbType === 'sqlserver' && mssqlPool) {
+    try {
+      const sql = require('mssql')
+      // mssqlPool is the ConnectionPool — after connect() it is usable directly
+      const request = mssqlPool.request()
+
+      // Convert PostgreSQL $1/$2 placeholders → @p1/@p2 for SQL Server
+      // Also fix SQL dialect differences
+      let mssqlText = text
+        .replace(/\$([0-9]+)/g, (_, n) => `@p${n}`)                   // $1 → @p1
+        .replace(/\bILIKE\b/gi, 'LIKE')                                // ILIKE → LIKE
+        .replace(/::(date|float|int|text|boolean)\b/gi, '')            // remove pg casts
+        .replace(/\bBOOLEAN\b/gi, 'BIT')                               // BOOLEAN → BIT
+        .replace(/\bSERIAL\b/gi, 'INT IDENTITY(1,1)')                  // SERIAL → IDENTITY
+        .replace(/\bTRUE\b/g, '1').replace(/\bFALSE\b/g, '0')        // standalone TRUE/FALSE
+        .replace(/=\s*true\b/gi, '=1').replace(/=\s*false\b/gi, '=0') // col=true → col=1
+        .replace(/\btrue\b/gi, '1').replace(/\bfalse\b/gi, '0')       // any remaining true/false
+        .replace(/NOW\(\)/gi, 'GETDATE()')                             // NOW() → GETDATE()
+        .replace(/CURDATE\(\)/gi, 'CAST(GETDATE() AS DATE)')           // CURDATE()
+
+      // Convert LIMIT n → TOP n for SQL Server
+      // Simple: SELECT ... LIMIT n  →  SELECT TOP n ...
+      // With OFFSET: SELECT ... LIMIT n OFFSET m  →  SELECT ... OFFSET m ROWS FETCH NEXT n ROWS ONLY
+      const limitWithOffset = mssqlText.match(/\bLIMIT\s+(\d+)\s+OFFSET\s+(\d+)/i)
+      const limitOnly = !limitWithOffset && mssqlText.match(/\bLIMIT\s+(\d+)/i)
+
+      if (limitWithOffset) {
+        const [fullMatch, limitN, offsetN] = limitWithOffset
+        mssqlText = mssqlText.replace(fullMatch, `OFFSET ${offsetN} ROWS FETCH NEXT ${limitN} ROWS ONLY`)
+        // Ensure ORDER BY exists (required for OFFSET...FETCH)
+        if (!/\bORDER BY\b/i.test(mssqlText)) {
+          mssqlText = mssqlText.replace(/\bOFFSET\s+\d+\s+ROWS/i, 'ORDER BY (SELECT NULL) OFFSET 0 ROWS')
+        }
+      } else if (limitOnly) {
+        const [fullMatch, limitN] = limitOnly
+        mssqlText = mssqlText.replace(fullMatch, '') // remove LIMIT n
+        // Insert TOP n right after SELECT (or SELECT DISTINCT)
+        mssqlText = mssqlText.replace(/\b(SELECT\s+(?:DISTINCT\s+)?)/i, `$1TOP ${limitN} `)
+      }
+
+      // Remove any trailing semicolons
+      mssqlText = mssqlText.replace(/;\s*$/, '')
+
+      // Bind parameters: @p1, @p2, ...
+      if (values && values.length) {
+        values.forEach((val, i) => {
+          // Auto-detect type
+          if (val === null || val === undefined) {
+            request.input(`p${i + 1}`, sql.NVarChar, null)
+          } else if (val instanceof Date) {
+            // Pass Date objects as ISO datetime strings
+            request.input(`p${i + 1}`, sql.DateTime, val)
+          } else if (typeof val === 'boolean') {
+            request.input(`p${i + 1}`, sql.Bit, val ? 1 : 0)
+          } else if (val === 1 || val === 0) {
+            request.input(`p${i + 1}`, sql.Int, val)
+          } else if (typeof val === 'number' && Number.isInteger(val)) {
+            request.input(`p${i + 1}`, sql.Int, val)
+          } else if (typeof val === 'number') {
+            request.input(`p${i + 1}`, sql.Float, val)
+          } else {
+            request.input(`p${i + 1}`, sql.NVarChar(sql.MAX), String(val))
+          }
+        })
+      }
+
+      // Handle RETURNING * → OUTPUT INSERTED.*
+      const hasReturning = /\bRETURNING\b/i.test(mssqlText)
+      if (hasReturning) {
+        // INSERT INTO table (...) VALUES (...) RETURNING *
+        // → INSERT INTO table (...) OUTPUT INSERTED.* VALUES (...)
+        mssqlText = mssqlText.replace(
+          /(INSERT\s+INTO\s+\S+\s*\([^)]+\))\s*(?:VALUES|SELECT)/i,
+          (match, beforeValues) => {
+            const keyword = match.slice(beforeValues.length).trim().split(/\s/)[0]
+            return `${beforeValues} OUTPUT INSERTED.* ${keyword}`
+          }
+        ).replace(/\s*RETURNING\s+[\w\s,*]+/gi, '')
+
+        // UPDATE table SET ... WHERE ... RETURNING *
+        // → UPDATE table SET ... OUTPUT INSERTED.* WHERE ...
+        mssqlText = mssqlText.replace(
+          /(UPDATE\s+\S+\s+SET\s+[\s\S]+?)\s+(WHERE\s+[\s\S]+?)\s*RETURNING\s+[\w\s,*]+/gi,
+          (_, setClause, whereClause) => `${setClause} OUTPUT INSERTED.* ${whereClause}`
+        )
+      }
+
+      const result = await request.query(mssqlText)
+      const rows = result.recordset || []
+
+      // For plain INSERT (no OUTPUT/RETURNING), get the last inserted ID via SCOPE_IDENTITY
+      let insertId = rows[0]?.id ? Number(rows[0].id) : 0
+      if (!insertId && !hasReturning && /^\s*INSERT\s+/i.test(text)) {
+        try {
+          const idResult = await mssqlPool.request().query('SELECT SCOPE_IDENTITY() AS id')
+          const scopeId = idResult.recordset[0]?.id
+          if (scopeId) insertId = Number(scopeId)
+        } catch (_) {}
+      }
+
+      return {
+        rows,
+        recordset: rows,
+        rowCount: rows.length || result.rowsAffected?.[0] || 0,
+        insertId,
+      }
+    } catch (err) {
+      console.error('❌ SQL Server query error:', err.message, '\nSQL:', text.slice(0, 200))
+      throw err
+    }
+  }
+
   // ── PostgreSQL path ──────────────────────────────────────────────────────
   if (dbType === 'postgres' && pgPool) {
     try {
@@ -186,12 +344,12 @@ async function query(text, values = []) {
 }
 
 async function getPool() {
-  return pgPool || mysqlPool
+  return mssqlPool || pgPool || mysqlPool
 }
 
 module.exports = {
   query,
   getPool,
-  pool: pgPool || mysqlPool,
+  pool: mssqlPool || pgPool || mysqlPool,
   dbType: () => dbType,
 }

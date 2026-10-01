@@ -31,9 +31,9 @@ async function generateMenuItemRef(tenantId) {
 
     // Find the highest existing ref number for this tenant's prefix
     const refRes = await query(
-      `SELECT menu_item_ref FROM menu_items
+      `SELECT TOP 1 menu_item_ref FROM menu_items
        WHERE tenant_id=$1 AND menu_item_ref LIKE $2
-       ORDER BY menu_item_ref DESC LIMIT 1`,
+       ORDER BY menu_item_ref DESC`,
       [tenantId, `${prefix}-%`]
     )
 
@@ -79,13 +79,58 @@ router.get('/', async (req, res) => {
 })
 
 // GET /api/menu-items/all  (admin)
+// Auto-backfills missing menu_item_ref values before returning
 router.get('/all', requireAuth, requireTenantMatch, async (req, res) => {
   try {
     try {
+      // ── Backfill any items that are missing a menu_item_ref ──────────────
+      try {
+        const missing = await query(
+          `SELECT id FROM menu_items WHERE tenant_id=$1 AND (menu_item_ref IS NULL OR menu_item_ref = '')`,
+          [req.tenantId]
+        )
+        if (missing.rows.length > 0) {
+          // Build prefix from tenant name
+          const tRes = await query(`SELECT name FROM tenants WHERE id=$1`, [req.tenantId])
+          const tName = tRes.rows[0]?.name || 'MENU'
+          const prefix = tName
+            .split(/\s+/)
+            .map(w => w.charAt(0).toUpperCase())
+            .join('')
+            .slice(0, 3)
+            .replace(/[^A-Z]/g, 'M') || 'M'
+
+          // Find highest existing ref number for this prefix
+          const lastRes = await query(
+            `SELECT TOP 1 menu_item_ref FROM menu_items
+             WHERE tenant_id=$1 AND menu_item_ref LIKE $2
+             ORDER BY menu_item_ref DESC`,
+            [req.tenantId, `${prefix}-%`]
+          )
+          let counter = 1
+          if (lastRes.rows[0]?.menu_item_ref) {
+            const parts = lastRes.rows[0].menu_item_ref.split('-')
+            counter = (parseInt(parts[parts.length - 1]) || 0) + 1
+          }
+
+          for (const row of missing.rows) {
+            const ref = `${prefix}-${String(counter).padStart(3, '0')}`
+            await query(
+              `UPDATE menu_items SET menu_item_ref=$1 WHERE id=$2 AND tenant_id=$3`,
+              [ref, row.id, req.tenantId]
+            )
+            counter++
+          }
+        }
+      } catch (backfillErr) {
+        console.warn('menu_item_ref backfill skipped:', backfillErr.message)
+      }
+
       const result = await query(`SELECT ${cols} FROM menu_items WHERE tenant_id=$1 ORDER BY category_id, name`, [req.tenantId])
       return res.json(result.rows)
     } catch (dbErr) {
       console.warn('DB unavailable in GET /menu-items/all, using seed fallback:', dbErr.message)
+
     }
     res.json(local.getSeedMenuItems(req.tenantId))
   } catch (err) {
@@ -382,7 +427,7 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
       const catKey = catName.toLowerCase().trim()   // ← FIX: declare catKey here
       try {
         const existing = await query(
-          `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
+          `SELECT TOP 1 id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2)`,
           [tid, catName]
         )
         if (existing.rows[0]) {
@@ -405,7 +450,7 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
         let newCatId = ins.insertId ? Number(ins.insertId) : null
         if (!newCatId) {
           const sel = await query(
-            `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
+            `SELECT TOP 1 id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2)`,
             [tid, catName]
           )
           newCatId = sel.rows[0] ? Number(sel.rows[0].id) : null
@@ -422,7 +467,7 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
         console.warn(`Bulk import: category "${catName}" error:`, catErr.message)
         try {
           const recoverSel = await query(
-            `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
+            `SELECT TOP 1 id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2)`,
             [tid, catName]
           )
           if (recoverSel.rows[0]) {
@@ -449,9 +494,9 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
         .replace(/[^A-Z]/g, 'M') || 'M'
 
       const lastRes = await query(
-        `SELECT menu_item_ref FROM menu_items
+        `SELECT TOP 1 menu_item_ref FROM menu_items
          WHERE tenant_id=$1 AND menu_item_ref LIKE $2
-         ORDER BY menu_item_ref DESC LIMIT 1`,
+         ORDER BY menu_item_ref DESC`,
         [tid, `${refPrefix}-%`]
       )
       if (lastRes.rows[0]?.menu_item_ref) {
@@ -522,7 +567,7 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
         let newItemId = ins.insertId ? Number(ins.insertId) : null
         if (!newItemId) {
           const sel = await query(
-            `SELECT id FROM menu_items WHERE tenant_id=$1 AND menu_item_ref=$2 LIMIT 1`,
+            `SELECT TOP 1 id FROM menu_items WHERE tenant_id=$1 AND menu_item_ref=$2`,
             [tid, menuItemRef]
           )
           newItemId = sel.rows[0] ? Number(sel.rows[0].id) : null

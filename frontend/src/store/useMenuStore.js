@@ -191,6 +191,7 @@ function makeStore(set, get) {
           calories:        i.calories || null,
           discount:        Number(i.discount) || 0,
           allergens:       i.allergens ? String(i.allergens).split(',').map(s => s.trim()).filter(Boolean) : [],
+          menuItemRef:     i.menu_item_ref || '',
         })) : []
 
         const normMods = Array.isArray(mods) ? mods.map(g => ({
@@ -477,7 +478,7 @@ function tenantKey() {
 export const useMenuStore = create(
   persist(makeStore, {
     name: tenantKey(),
-    version: 3,
+    version: 4,
     // Only persist the data arrays — not the _hydrated flag
     partialize: s => ({
       categories:     s.categories,
@@ -485,5 +486,18 @@ export const useMenuStore = create(
       modifierGroups: s.modifierGroups,
       tables:         s.tables,
     }),
+    // When migrating from an older version, clear the cached items so a
+    // fresh fetchAll() always runs and picks up new fields like menuItemRef
+    migrate: (persistedState, version) => {
+      if (version < 4) {
+        return {
+          categories:     [],
+          menuItems:      [],
+          modifierGroups: [],
+          tables:         [],
+        }
+      }
+      return persistedState
+    },
   })
 )

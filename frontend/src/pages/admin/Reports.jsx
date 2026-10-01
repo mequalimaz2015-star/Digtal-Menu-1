@@ -190,7 +190,7 @@ export default function Reports() {
 
     const logoImg = await loadImage('/logo.png')
     const doc = new jsPDF()
-    const restaurantName = 'ABC Restaurant' // Standardized setup, later fetched from context
+    const restaurantName = 'MEGA Digital Menu' // Standardized setup, later fetched from context
     const restaurantAddress = 'Piazza, Addis Ababa, Ethiopia'
     const restaurantContact = '+251 911 123 456'
 

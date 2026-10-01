@@ -106,7 +106,7 @@ router.post('/', async (req, res) => {
         let orderId = insertResult.insertId ? Number(insertResult.insertId) : null
         if (!orderId) {
           const fetched = await query(
-            `SELECT id FROM orders WHERE order_ref=$1 LIMIT 1`, [orderRef]
+            `SELECT TOP 1 id FROM orders WHERE order_ref=$1`, [orderRef]
           )
           orderId = fetched.rows[0] ? Number(fetched.rows[0].id) : null
         }
