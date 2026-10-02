@@ -3,8 +3,9 @@ import { persist } from 'zustand/middleware'
 import client from '../api/client'
 import { restaurantInfo as defaultInfo } from '../data/mockData'
 
-// Return storage key namespaced by the current tenant slug so different
-// restaurants on the same browser never share a cached restaurant-info store.
+// Return storage key namespaced by the current tenant slug.
+// Re-evaluated on every read/write so navigating to a new tenant URL
+// always gets the correct isolated store — never returns stale data.
 function restaurantKey() {
   if (typeof window === 'undefined') return 'restaurant-store-default'
   const pathMatch = window.location.pathname.match(/^\/r\/([^\/]+)/)
@@ -131,8 +132,25 @@ export const useRestaurantStore = create(
       },
     }),
     {
-      name: restaurantKey(),
-      version: 4,
+      name: 'restaurant-store',
+      version: 5,
+      // Dynamic storage: key re-evaluated on every read/write based on current URL
+      // This prevents stale restaurant data from a previous tenant showing up
+      storage: {
+        getItem: (name) => {
+          const key = restaurantKey()
+          const val = localStorage.getItem(key)
+          return val ? JSON.parse(val) : null
+        },
+        setItem: (name, value) => {
+          const key = restaurantKey()
+          localStorage.setItem(key, JSON.stringify(value))
+        },
+        removeItem: (name) => {
+          const key = restaurantKey()
+          localStorage.removeItem(key)
+        },
+      },
       partialize: s => ({ info: s.info }),
     }
   )

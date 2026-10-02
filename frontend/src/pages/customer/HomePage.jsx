@@ -46,22 +46,32 @@ export default function HomePage() {
 
   useEffect(() => {
     if (tenantSlug) {
-      // Store in sessionStorage so customer API calls (POST order, GET tables)
-      // all send the correct X-Tenant-Slug header — even with no login
+      // ── Clear stale cached data when slug changes ──────────────────────────
+      // If the stored slug differs from the URL slug, wipe the old persisted
+      // stores so Zustand doesn't rehydrate another restaurant's data on top
+      // of the correct fetch. This is the fix for "refresh shows wrong restaurant".
+      const prevSlug = localStorage.getItem('tenant_slug')
+      if (prevSlug && prevSlug !== tenantSlug) {
+        // Remove old restaurant and menu caches
+        localStorage.removeItem(`restaurant-store-${prevSlug}`)
+        localStorage.removeItem(`menu-store-${prevSlug}`)
+        // Also clear generic keys
+        localStorage.removeItem('restaurant-store-default')
+        localStorage.removeItem('menu-store-default')
+      }
+
+      // Always write the current URL slug — this is the source of truth
       sessionStorage.setItem('tenant_slug', tenantSlug)
       localStorage.setItem('tenant_slug', tenantSlug)
+
       fetchRestaurant(tenantSlug)
       fetchCustomerMenu(tenantSlug)
     } else {
-      // No slug in URL — use default tenant (abc-restaurant / Five Stop)
-      // Store it so checkout API calls still work
-      const defaultSlug = 'abc-restaurant'
+      // No slug in URL — use whatever is in localStorage or default
+      const defaultSlug = localStorage.getItem('tenant_slug') || 'abc-restaurant'
       sessionStorage.setItem('tenant_slug', defaultSlug)
-      if (!localStorage.getItem('tenant_slug')) {
-        localStorage.setItem('tenant_slug', defaultSlug)
-      }
-      fetchRestaurant(localStorage.getItem('tenant_slug') || defaultSlug)
-      fetchCustomerMenu(localStorage.getItem('tenant_slug') || defaultSlug)
+      fetchRestaurant(defaultSlug)
+      fetchCustomerMenu(defaultSlug)
     }
   }, [tenantSlug, fetchRestaurant, fetchCustomerMenu])
 

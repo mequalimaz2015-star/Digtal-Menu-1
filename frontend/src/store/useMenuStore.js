@@ -470,15 +470,36 @@ function makeStore(set, get) {
 
 // The storage key is namespaced per tenant so different restaurants on the
 // same browser never share a cached menu store.
+// tenantKey() reads from the URL path first so it always reflects
+// the currently-visited restaurant, not whatever was last stored.
 function tenantKey() {
-  const slug = localStorage.getItem('tenant_slug') || 'default'
+  if (typeof window === 'undefined') return 'menu-store-default'
+  const pathMatch = window.location.pathname.match(/^\/r\/([^\/]+)/)
+  const slug = pathMatch ? pathMatch[1] : (localStorage.getItem('tenant_slug') || 'default')
   return `menu-store-${slug}`
 }
 
 export const useMenuStore = create(
   persist(makeStore, {
-    name: tenantKey(),
-    version: 4,
+    name: 'menu-store',
+    version: 5,
+    // Dynamic storage: key re-evaluated on every read/write based on current URL
+    // This is the fix for "refresh shows wrong restaurant's menu"
+    storage: {
+      getItem: (_name) => {
+        const key = tenantKey()
+        const val = localStorage.getItem(key)
+        return val ? JSON.parse(val) : null
+      },
+      setItem: (_name, value) => {
+        const key = tenantKey()
+        localStorage.setItem(key, JSON.stringify(value))
+      },
+      removeItem: (_name) => {
+        const key = tenantKey()
+        localStorage.removeItem(key)
+      },
+    },
     // Only persist the data arrays — not the _hydrated flag
     partialize: s => ({
       categories:     s.categories,
