@@ -226,12 +226,12 @@ router.post('/send-otp', async (req, res) => {
       sendCount: (existing?.sendCount || 0) + 1,
     })
 
-    // Send email
+    // Send email — plain text body for better inbox delivery (avoid spam filters)
     const emailResult = await sendEmail({
       to:      cleanEmail,
       subject: `Verify your email — MEGA Digital Menu`,
       html:    otpEmailHtml(otp, restaurantName),
-      text:    `Your MEGA Digital Menu verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, please ignore this email.`,
+      text:    `Hi,\n\nYour MEGA Digital Menu verification code is:\n\n${otp}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.\n\n— MEGA Digital Menu Team`,
     })
 
     const smtpConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS)
@@ -242,10 +242,9 @@ router.post('/send-otp', async (req, res) => {
       ok: true,
       message: emailResult.ok
         ? `Verification code sent to ${cleanEmail}`
-        : `Could not send email — use the code shown on screen`,
+        : `Email could not be sent — your code is shown on screen`,
       emailDelivered: emailResult.ok,
-      // Only expose devCode when email actually failed OR SMTP not configured
-      // Never show it when email was successfully delivered (security)
+      // Always send devCode when email failed so user can still register
       ...(!emailResult.ok && { devCode: otp }),
       ...(!smtpConfigured && { smtpMissing: true }),
     })

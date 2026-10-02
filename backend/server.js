@@ -39,6 +39,36 @@ app.use('/api/platform-chat', require('./routes/platformChat'))
 
 app.get('/health', (req, res) => res.json({ status: 'healthy' }))
 app.get('/api/status', (req, res) => res.json({ message: 'ABC Restaurant API', status: 'running' }))
+
+// ── Public IP endpoint — used to whitelist server IP in Brevo SMTP ────────────
+app.get('/api/server-ip', async (req, res) => {
+  const os = require('os')
+  const interfaces = os.networkInterfaces()
+  let localIp = null
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        localIp = iface.address
+        break
+      }
+    }
+  }
+  // Try to get public IP from external service
+  try {
+    const https = require('https')
+    const publicIp = await new Promise((resolve, reject) => {
+      https.get('https://api.ipify.org?format=json', (r) => {
+        let data = ''
+        r.on('data', d => data += d)
+        r.on('end', () => { try { resolve(JSON.parse(data).ip) } catch { resolve(null) } })
+      }).on('error', reject)
+    })
+    return res.json({ publicIp, localIp, note: 'Add publicIp to Brevo Authorized IPs to enable email sending' })
+  } catch (_) {
+    res.json({ publicIp: null, localIp, note: 'Could not fetch public IP' })
+  }
+})
+
 app.get('/api/network-info', (req, res) => {
   const os = require('os')
   const interfaces = os.networkInterfaces()

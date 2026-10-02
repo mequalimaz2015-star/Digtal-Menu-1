@@ -520,20 +520,25 @@ export default function TenantRegistration() {
                   {/* Info box — only shown when email failed (devCode set) */}
                   {devCode ? (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                      className="mb-5 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl flex-shrink-0">⚠️</span>
-                        <div className="flex-1">
-                          <p className="text-red-400 text-xs font-bold uppercase tracking-wide mb-1">Email could not be delivered</p>
-                          <p className="text-slate-300 text-xs leading-relaxed mb-3">
-                            We couldn't send the email to your inbox. Use this code instead — it works exactly the same.
-                          </p>
-                          <div className="bg-slate-950 border border-red-500/40 rounded-lg px-4 py-3 text-center">
-                            <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Your verification code</p>
-                            <p className="text-red-400 text-2xl font-black font-mono tracking-[0.3em]">{devCode}</p>
-                            <p className="text-slate-500 text-[10px] mt-1">Already filled in for you ↓</p>
-                          </div>
-                        </div>
+                      className="mb-5 p-5 bg-amber-500/15 border-2 border-amber-500/60 rounded-2xl">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-2xl">📋</span>
+                        <p className="text-amber-400 text-sm font-black uppercase tracking-wide">Email not delivered — use this code</p>
+                      </div>
+                      <p className="text-slate-300 text-xs leading-relaxed mb-4">
+                        The verification email couldn't be sent. Copy the code below and paste it into the boxes. It works exactly the same.
+                      </p>
+                      <div className="bg-slate-950 border-2 border-amber-500/50 rounded-xl px-4 py-4 text-center relative">
+                        <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-2">Your verification code</p>
+                        <p className="text-amber-400 text-4xl font-black font-mono tracking-[0.4em] mb-2">{devCode}</p>
+                        <p className="text-slate-400 text-[11px] mb-3">⬆️ This code is already filled in the boxes below</p>
+                        <button
+                          type="button"
+                          onClick={() => { navigator.clipboard?.writeText(devCode); }}
+                          className="px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-400 text-xs font-bold rounded-lg transition-colors"
+                        >
+                          📋 Copy Code
+                        </button>
                       </div>
                     </motion.div>
                   ) : (
