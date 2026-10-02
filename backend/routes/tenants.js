@@ -173,7 +173,7 @@ router.post('/register', async (req, res) => {
       // ── Step 2: insert admin user ─────────────────────────────────────────
       const userInsert = await query(`
         INSERT INTO users (name, email, password, role, tenant_id, is_active)
-        VALUES ($1, $2, $3, 'admin', $4, true)
+        VALUES ($1, $2, $3, 'admin', $4, 1)
       `, [admin_name || `${restaurant_name} Admin`, email, hashedPassword, tenantId])
 
       let userId = userInsert.insertId ? Number(userInsert.insertId) : null

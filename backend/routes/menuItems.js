@@ -58,13 +58,13 @@ router.get('/', async (req, res) => {
     try {
       if (category_id) {
         const result = await query(
-          `SELECT ${cols} FROM menu_items WHERE tenant_id=$1 AND is_available=true AND category_id=$2 ORDER BY is_featured DESC, is_best_seller DESC, name`,
+          `SELECT ${cols} FROM menu_items WHERE tenant_id=$1 AND is_available=1 AND category_id=$2 ORDER BY is_featured DESC, is_best_seller DESC, name`,
           [req.tenantId, parseInt(category_id)]
         )
         return res.json(result.rows)
       }
       const result = await query(
-        `SELECT ${cols} FROM menu_items WHERE tenant_id=$1 AND is_available=true ORDER BY is_featured DESC, is_best_seller DESC, name`,
+        `SELECT ${cols} FROM menu_items WHERE tenant_id=$1 AND is_available=1 ORDER BY is_featured DESC, is_best_seller DESC, name`,
         [req.tenantId]
       )
       return res.json(result.rows)
@@ -142,7 +142,7 @@ router.get('/all', requireAuth, requireTenantMatch, async (req, res) => {
 router.get('/featured', async (req, res) => {
   try {
     try {
-      const result = await query(`SELECT ${cols} FROM menu_items WHERE tenant_id=$1 AND is_featured=true AND is_available=true`, [req.tenantId])
+      const result = await query(`SELECT ${cols} FROM menu_items WHERE tenant_id=$1 AND is_featured=1 AND is_available=1`, [req.tenantId])
       return res.json(result.rows)
     } catch (dbErr) {
       console.warn('DB unavailable in GET /menu-items/featured, using seed fallback:', dbErr.message)
@@ -159,7 +159,7 @@ router.get('/search', async (req, res) => {
     const q = req.query.q || ''
     try {
       const result = await query(
-        `SELECT ${cols} FROM menu_items WHERE tenant_id=$1 AND is_available=true AND (name ILIKE $2 OR name_am ILIKE $2 OR description ILIKE $2)`,
+        `SELECT ${cols} FROM menu_items WHERE tenant_id=$1 AND is_available=1 AND (name LIKE $2 OR name_am LIKE $2 OR description LIKE $2)`,
         [req.tenantId, `%${q}%`]
       )
       return res.json(result.rows)
@@ -443,7 +443,7 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
 
         const ins = await query(
           `INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order, is_active)
-           VALUES ($1,$2,$3,$4,$5,$6,true)`,
+           VALUES ($1,$2,$3,$4,$5,$6,1)`,
           [tid, catName, catStyle.nameAm || '', catStyle.icon || '🍽️', catStyle.color || '#e85d04', sortOrder]
         )
 

@@ -29,7 +29,7 @@ async function getAIReply(userText, sessionId, tableNumber, tenantId) {
 
   try {
     const [menuRes, restRes] = await Promise.all([
-      query(`SELECT name, price, description, category_id, is_available, is_popular, is_spicy, is_vegetarian FROM menu_items WHERE tenant_id = $1 AND is_available=true ORDER BY is_popular DESC, name LIMIT 20`, [tenantId]),
+      query(`SELECT name, price, description, category_id, is_available, is_popular, is_spicy, is_vegetarian FROM menu_items WHERE tenant_id = $1 AND is_available=1 ORDER BY is_popular DESC, name LIMIT 20`, [tenantId]),
       query(`SELECT name, address, phone, working_hours, wifi_password, vat_rate, service_charge_rate FROM tenants WHERE id = $1`, [tenantId]),
     ])
     menuItems      = menuRes.rows  || []

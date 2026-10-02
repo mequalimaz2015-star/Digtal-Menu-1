@@ -10,7 +10,7 @@ router.use(resolveTenant)
 router.get('/', async (req, res) => {
   try {
     try {
-      const result = await query(`SELECT * FROM categories WHERE tenant_id = $1 AND is_active=true ORDER BY sort_order`, [req.tenantId])
+      const result = await query(`SELECT * FROM categories WHERE tenant_id = $1 AND is_active=1 ORDER BY sort_order`, [req.tenantId])
       return res.json(result.rows)
     } catch (dbErr) {
       console.warn('DB unavailable in GET /categories, using seed fallback:', dbErr.message)

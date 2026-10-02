@@ -45,7 +45,7 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), checkS
     // Plain INSERT — no RETURNING (avoids SQL Server emulation bugs)
     const ins = await query(`
       INSERT INTO users (tenant_id, name, email, password, role, is_active)
-      VALUES ($1, $2, $3, $4, $5, true)
+      VALUES ($1, $2, $3, $4, $5, 1)
     `, [req.tenantId, name || '', email, hash, (role || 'waiter').toLowerCase()])
 
     // Resolve inserted id via insertId (MySQL) or SCOPE_IDENTITY (SQL Server) or SELECT fallback
