@@ -1,14 +1,18 @@
 /**
  * emailService.js — MEGA Digital Menu
  *
- * Uses Brevo Transactional Email HTTP API (v3) — no SMTP, no port issues,
- * no IP whitelisting needed. Just the API key.
+ * Sends via Brevo SMTP (nodemailer) using the SMTP credentials.
+ * The SMTP_USER (bc0aa6001@smtp-brevo.com) is the authorized sender.
  *
- * Set in environment variables (AletCloud Variables tab):
- *   BREVO_API_KEY=xsmtpsib-...   ← your Brevo API key
- *   SMTP_FROM=MEGA Digital Menu <mequalimaz2015@gmail.com>  ← sender name/email
+ * Required env vars:
+ *   SMTP_HOST=smtp-relay.brevo.com
+ *   SMTP_PORT=587
+ *   SMTP_USER=bc0aa6001@smtp-brevo.com
+ *   SMTP_PASS=xsmtpsib-...
+ *   SMTP_FROM=MEGA Digital Menu <bc0aa6001@smtp-brevo.com>
  *
- * Falls back to nodemailer SMTP if BREVO_API_KEY is not set.
+ * Optional — Brevo HTTP API (only works if sender domain is verified in Brevo):
+ *   BREVO_API_KEY=xsmtpsib-...
  */
 
 const https = require('https')
@@ -18,15 +22,13 @@ async function sendViaBrevoApi({ to, subject, html, text }) {
   const apiKey = process.env.BREVO_API_KEY
   if (!apiKey) throw new Error('BREVO_API_KEY not set')
 
-  const fromRaw  = process.env.SMTP_FROM || 'MEGA Digital Menu <mequalimaz2015@gmail.com>'
-  // Parse "Name <email>" format
-  const fromMatch = fromRaw.match(/^(.*?)\s*<(.+?)>$/)
-  const fromName  = fromMatch ? fromMatch[1].trim() : 'MEGA Digital Menu'
-  const fromEmail = fromMatch ? fromMatch[2].trim() : fromRaw.trim()
+  // Always use SMTP_USER as sender — it's the pre-authorized Brevo address
+  const fromEmail = process.env.SMTP_USER || 'bc0aa6001@smtp-brevo.com'
+  const fromName  = 'MEGA Digital Menu'
 
   const body = JSON.stringify({
-    sender:     { name: fromName, email: fromEmail },
-    to:         [{ email: to }],
+    sender:      { name: fromName, email: fromEmail },
+    to:          [{ email: to }],
     subject,
     htmlContent: html || `<pre>${text}</pre>`,
     textContent: text || '',
@@ -39,9 +41,9 @@ async function sendViaBrevoApi({ to, subject, html, text }) {
         path:     '/v3/smtp/email',
         method:   'POST',
         headers:  {
-          'Content-Type':  'application/json',
-          'Accept':        'application/json',
-          'api-key':       apiKey,
+          'Content-Type':   'application/json',
+          'Accept':         'application/json',
+          'api-key':        apiKey,
           'Content-Length': Buffer.byteLength(body),
         },
       },
@@ -63,74 +65,67 @@ async function sendViaBrevoApi({ to, subject, html, text }) {
   })
 }
 
-// ── Send via nodemailer SMTP (fallback) ───────────────────────────────────────
+// ── Send via nodemailer SMTP ──────────────────────────────────────────────────
 async function sendViaSMTP({ to, subject, html, text }) {
   const nodemailer = require('nodemailer')
 
-  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-    const transport = nodemailer.createTransport({
-      host:   process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-      port:   parseInt(process.env.SMTP_PORT || '587'),
-      secure: false,
-      auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      tls:    { rejectUnauthorized: false },
-    })
-    const info = await transport.sendMail({
-      from:    process.env.SMTP_FROM || 'MEGA Digital Menu <mequalimaz2015@gmail.com>',
-      to, subject, html, text,
-    })
-    return { ok: true, messageId: info.messageId }
+  const smtpHost = process.env.SMTP_HOST || 'smtp-relay.brevo.com'
+  const smtpPort = parseInt(process.env.SMTP_PORT || '587')
+  const smtpUser = process.env.SMTP_USER
+  const smtpPass = process.env.SMTP_PASS
+
+  if (!smtpUser || !smtpPass) {
+    throw new Error('SMTP_USER and SMTP_PASS are required for SMTP delivery')
   }
 
-  // Ethereal test account
-  const testAccount = await nodemailer.createTestAccount()
-  const transport   = nodemailer.createTransport({
-    host: 'smtp.ethereal.email', port: 587, secure: false,
-    auth: { user: testAccount.user, pass: testAccount.pass },
+  // The from address MUST be the SMTP_USER for Brevo relay
+  const from = `MEGA Digital Menu <${smtpUser}>`
+
+  const transport = nodemailer.createTransport({
+    host:   smtpHost,
+    port:   smtpPort,
+    secure: smtpPort === 465,
+    auth:   { user: smtpUser, pass: smtpPass },
+    tls:    { rejectUnauthorized: false },
+    connectionTimeout: 10000,
+    greetingTimeout:   10000,
+    socketTimeout:     15000,
   })
-  const info    = await transport.sendMail({ from: testAccount.user, to, subject, html, text })
-  const preview = nodemailer.getTestMessageUrl(info)
-  console.log('📧 Ethereal preview:', preview)
-  return { ok: true, messageId: info.messageId, preview }
+
+  const info = await transport.sendMail({ from, to, subject, html, text })
+  return { ok: true, messageId: info.messageId }
 }
 
 // ── Main sendEmail function ───────────────────────────────────────────────────
 async function sendEmail({ to, subject, html, text }) {
-  // Try Brevo HTTP API first (preferred — no IP whitelist, no port issues)
+  console.log(`📧 Attempting to send email to ${to}`)
+  console.log(`📧 Config: BREVO_API_KEY=${process.env.BREVO_API_KEY ? 'SET' : 'NOT SET'} | SMTP_USER=${process.env.SMTP_USER || 'NOT SET'} | SMTP_PASS=${process.env.SMTP_PASS ? 'SET' : 'NOT SET'}`)
+
+  // Try Brevo HTTP API first (uses SMTP_USER as sender — always authorized)
   if (process.env.BREVO_API_KEY) {
     try {
       const result = await sendViaBrevoApi({ to, subject, html, text })
-      console.log(`📧 Brevo API ✅ sent to ${to} — messageId: ${result.messageId}`)
+      console.log(`📧 Brevo HTTP API ✅ sent to ${to} — messageId: ${result.messageId}`)
       return { ok: true, messageId: result.messageId }
     } catch (err) {
-      console.error(`📧 Brevo API ❌ failed: ${err.message}`)
-      // If Brevo API failed (e.g. sender domain not verified), try SMTP fallback
-      if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-        try {
-          const result = await sendViaSMTP({ to, subject, html, text })
-          console.log(`📧 SMTP fallback ✅ sent to ${to}`)
-          return result
-        } catch (smtpErr) {
-          console.error(`📧 SMTP fallback ❌ failed: ${smtpErr.message}`)
-        }
-      }
-      return { ok: false, error: err.message }
+      console.error(`📧 Brevo HTTP API ❌ failed: ${err.message}`)
+      // Fall through to SMTP
     }
   }
 
-  // Fall back to SMTP
+  // Try Brevo SMTP
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
       const result = await sendViaSMTP({ to, subject, html, text })
-      console.log(`📧 SMTP ✅ sent to ${to}`)
+      console.log(`📧 Brevo SMTP ✅ sent to ${to}`)
       return result
     } catch (err) {
-      console.error(`📧 SMTP ❌ failed: ${err.message}`)
-      return { ok: false, error: err.message }
+      console.error(`📧 Brevo SMTP ❌ failed: ${err.message}`)
+      return { ok: false, error: `SMTP error: ${err.message}` }
     }
   }
 
-  console.error('📧 No email credentials configured (BREVO_API_KEY or SMTP_USER/PASS required)')
+  console.error('📧 No email credentials configured. Set BREVO_API_KEY or SMTP_USER/PASS in environment variables.')
   return { ok: false, error: 'No email provider configured' }
 }
 

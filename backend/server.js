@@ -40,6 +40,29 @@ app.use('/api/platform-chat', require('./routes/platformChat'))
 app.get('/health', (req, res) => res.json({ status: 'healthy' }))
 app.get('/api/status', (req, res) => res.json({ message: 'ABC Restaurant API', status: 'running' }))
 
+// ── Email config diagnostic (no auth needed — remove after debugging) ─────────
+app.get('/api/email-test', async (req, res) => {
+  const { sendEmail } = require('./emailService')
+  const to = req.query.to || 'test@example.com'
+  const config = {
+    brevoApiKey: process.env.BREVO_API_KEY ? `SET (${process.env.BREVO_API_KEY.slice(0, 20)}...)` : 'NOT SET',
+    smtpUser: process.env.SMTP_USER || 'NOT SET',
+    smtpPass: process.env.SMTP_PASS ? 'SET' : 'NOT SET',
+    smtpFrom: process.env.SMTP_FROM || 'NOT SET',
+  }
+  try {
+    const result = await sendEmail({
+      to,
+      subject: 'MEGA — Email Test',
+      html: '<p>This is a test email from MEGA Digital Menu. If you see this, email is working!</p>',
+      text: 'This is a test email from MEGA Digital Menu. If you see this, email is working!',
+    })
+    res.json({ config, result })
+  } catch (err) {
+    res.json({ config, error: err.message })
+  }
+})
+
 // ── Public IP endpoint — used to whitelist server IP in Brevo SMTP ────────────
 app.get('/api/server-ip', async (req, res) => {
   const os = require('os')

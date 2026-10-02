@@ -424,14 +424,16 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
     categories.forEach(c => { if (c.name) catStyleMap[c.name.toLowerCase().trim()] = c })
 
     for (const catName of allCatNames) {
-      const catKey = catName.toLowerCase().trim()   // ← FIX: declare catKey here
+      const catKey = catName.toLowerCase().trim()
       try {
+        // Try to find existing category first
         const existing = await query(
           `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
           [tid, catName]
         )
         if (existing.rows[0]) {
           categoryIdMap[catKey] = Number(existing.rows[0].id)
+          console.log(`📂 Bulk cat found existing: "${catName}" → id ${existing.rows[0].id}`)
           continue
         }
 
@@ -441,30 +443,38 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
         const sortOrder = Number(sortRes.rows[0]?.next || 1)
         const catStyle  = catStyleMap[catKey] || {}
 
-        const ins = await query(
-          `INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order, is_active)
-           VALUES ($1,$2,$3,$4,$5,$6,1)`,
-          [tid, catName, catStyle.nameAm || '', catStyle.icon || '🍽️', catStyle.color || '#e85d04', sortOrder]
-        )
-
-        let newCatId = ins.insertId ? Number(ins.insertId) : null
-        if (!newCatId) {
-          const sel = await query(
-            `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
+        // INSERT then immediately SELECT back — works for MySQL and any DB
+        // Note: name_am/icon/color columns might not exist on all deployments;
+        // if this INSERT fails, the catch block will try a minimal INSERT.
+        try {
+          await query(
+            `INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order)
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [tid, catName, catStyle.nameAm || '', catStyle.icon || '🍽️', catStyle.color || '#e85d04', sortOrder]
+          )
+        } catch (insertErr) {
+          // Fallback: minimal INSERT with only required columns
+          console.warn(`Bulk import: full category INSERT failed (${insertErr.message}), trying minimal INSERT`)
+          await query(
+            `INSERT INTO categories (tenant_id, name) VALUES ($1,$2)`,
             [tid, catName]
           )
-          newCatId = sel.rows[0] ? Number(sel.rows[0].id) : null
         }
 
-        if (newCatId) {
-          categoryIdMap[catKey] = newCatId   // ← FIX: use catKey not catName
-          console.log(`✅ Bulk cat: "${catName}" → id ${newCatId}`)
+        // Always SELECT back — don't rely on insertId
+        const sel = await query(
+          `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
+          [tid, catName]
+        )
+        if (sel.rows[0]) {
+          categoryIdMap[catKey] = Number(sel.rows[0].id)
+          console.log(`✅ Bulk cat created: "${catName}" → id ${sel.rows[0].id}`)
         } else {
-          console.warn(`Bulk import: could not resolve id for category "${catName}"`)
+          console.error(`❌ Bulk import: INSERT succeeded but SELECT returned nothing for category "${catName}"`)
         }
       } catch (catErr) {
-        // Duplicate key or other error — recover by SELECT
-        console.warn(`Bulk import: category "${catName}" error:`, catErr.message)
+        // Duplicate key or race — recover by SELECT
+        console.error(`❌ Bulk import: category "${catName}" insert error: ${catErr.message}`)
         try {
           const recoverSel = await query(
             `SELECT id FROM categories WHERE tenant_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1`,
@@ -473,8 +483,12 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
           if (recoverSel.rows[0]) {
             categoryIdMap[catKey] = Number(recoverSel.rows[0].id)
             console.log(`✅ Bulk cat recovered: "${catName}" → id ${recoverSel.rows[0].id}`)
+          } else {
+            console.error(`❌ Bulk import: could not recover category "${catName}" — both INSERT and SELECT failed`)
           }
-        } catch (_) {}
+        } catch (recoverErr) {
+          console.error(`❌ Bulk import: recovery SELECT also failed for "${catName}": ${recoverErr.message}`)
+        }
       }
     }
 
@@ -514,12 +528,41 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
       const itemName  = String(item.name  || '').trim()
       const itemPrice = parseFloat(item.price) || 0
       if (!itemName)  { skipped.push('(unnamed)'); continue }
-      if (itemPrice <= 0) { skipped.push(itemName); continue }
+      if (itemPrice <= 0) {
+        console.warn(`Bulk import: skipping "${itemName}" — price is "${item.price}" → parsed as ${itemPrice}`)
+        skipped.push(itemName)
+        continue
+      }
 
       // Lowercase lookup — matches how keys were stored above
-      const catId = categoryIdMap[(item.categoryName || '').toLowerCase().trim()]
+      // Fall back to any available category if the specific one wasn't resolved
+      let catId = categoryIdMap[(item.categoryName || '').toLowerCase().trim()]
       if (!catId) {
-        console.warn(`Bulk import: no catId for "${item.categoryName}" (key="${(item.categoryName||'').toLowerCase().trim()}") — skipping "${itemName}"`)
+        // Try to find any category for this tenant as last resort
+        const fallbackCatId = Object.values(categoryIdMap)[0]
+        if (fallbackCatId) {
+          console.warn(`Bulk import: no catId for "${item.categoryName}" — using first available category`)
+          catId = fallbackCatId
+        } else {
+          // No categories at all — create a General one
+          try {
+            await query(
+              `INSERT INTO categories (tenant_id, name, name_am, icon, color, sort_order) VALUES ($1,'General','','🍽️','#e85d04',1)`,
+              [tid]
+            )
+            const genSel = await query(`SELECT id FROM categories WHERE tenant_id=$1 AND name='General' LIMIT 1`, [tid])
+            if (genSel.rows[0]) {
+              catId = Number(genSel.rows[0].id)
+              categoryIdMap['general'] = catId
+            }
+          } catch (_) {
+            const genSel = await query(`SELECT id FROM categories WHERE tenant_id=$1 LIMIT 1`, [tid]).catch(() => ({ rows: [] }))
+            catId = genSel.rows[0] ? Number(genSel.rows[0].id) : null
+          }
+        }
+      }
+      if (!catId) {
+        console.warn(`Bulk import: could not resolve any category for "${itemName}" — skipping`)
         skipped.push(itemName)
         continue
       }
@@ -589,6 +632,7 @@ router.post('/bulk', requireAuth, requireTenantMatch, requireRole(['admin']), as
       createdItems: created,
       skippedNames: skipped,
       categoriesCreated: Object.keys(categoryIdMap).length,
+      categoryMapKeys: Object.keys(categoryIdMap), // debug info
     })
   } catch (err) {
     console.error('Bulk import error:', err.message)

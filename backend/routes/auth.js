@@ -236,6 +236,7 @@ router.post('/send-otp', async (req, res) => {
 
     const smtpConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS)
     console.log(`📧 OTP to ${cleanEmail}: ${otp} — email ${emailResult.ok ? '✅ delivered' : '❌ failed: ' + emailResult.error}`)
+    console.log(`📧 Config: BREVO_API_KEY=${process.env.BREVO_API_KEY ? 'SET('+process.env.BREVO_API_KEY.slice(0,12)+'...)' : 'NOT SET'} | SMTP_USER=${process.env.SMTP_USER || 'NOT SET'}`)
     if (emailResult.preview) console.log('   Preview (Ethereal):', emailResult.preview)
 
     res.json({
