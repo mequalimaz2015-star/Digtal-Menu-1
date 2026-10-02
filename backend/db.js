@@ -86,18 +86,18 @@ if (isPostgres) {
 if (isMySQL) {
   try {
     const mysql = require('mysql2/promise')
-    const config = process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('mysql')
-      ? process.env.DATABASE_URL
-      : {
-          host:     process.env.MYSQL_HOST || process.env.DB_HOST || 'localhost',
-          port:     parseInt(process.env.MYSQL_PORT || process.env.DB_PORT || '3306', 10),
-          user:     process.env.MYSQL_USER || process.env.DB_USERNAME || process.env.DB_USER || 'root',
-          password: process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || '',
-          database: process.env.MYSQL_DATABASE || process.env.DB_DATABASE || process.env.DB_NAME || 'digital_menu',
-          waitForConnections: true,
-          connectionLimit: 10,
-          decimalNumbers: true,
-        }
+    // Always prefer individual vars over DATABASE_URL — passwords with special
+    // characters (colons, @, etc.) break URL parsing in mysql2
+    const config = {
+      host:     process.env.MYSQL_HOST     || process.env.DB_HOST     || 'localhost',
+      port:     parseInt(process.env.MYSQL_PORT || process.env.DB_PORT || '3306', 10),
+      user:     process.env.MYSQL_USER     || process.env.DB_USERNAME || process.env.DB_USER || 'root',
+      password: process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || '',
+      database: process.env.MYSQL_DATABASE || process.env.DB_DATABASE || process.env.DB_NAME || 'digital_menu',
+      waitForConnections: true,
+      connectionLimit: 10,
+      decimalNumbers: true,
+    }
     mysqlPool = mysql.createPool(config)
     dbType = 'mysql'
     mysqlPool.query('SELECT 1')
