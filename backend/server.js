@@ -45,17 +45,18 @@ app.get('/api/email-test', async (req, res) => {
   const { sendEmail } = require('./emailService')
   const to = req.query.to || 'test@example.com'
   const config = {
-    brevoApiKey: process.env.BREVO_API_KEY ? `SET (${process.env.BREVO_API_KEY.slice(0, 20)}...)` : 'NOT SET',
-    smtpUser: process.env.SMTP_USER || 'NOT SET',
-    smtpPass: process.env.SMTP_PASS ? 'SET' : 'NOT SET',
-    smtpFrom: process.env.SMTP_FROM || 'NOT SET',
+    BREVO_API_KEY:  process.env.BREVO_API_KEY ? `SET (${process.env.BREVO_API_KEY.slice(0,16)}...)` : 'NOT SET ⚠️',
+    BREVO_SENDER:   process.env.BREVO_SENDER  || 'NOT SET',
+    SMTP_USER:      process.env.SMTP_USER     || 'NOT SET ⚠️',
+    SMTP_PASS:      process.env.SMTP_PASS     ? 'SET' : 'NOT SET ⚠️',
+    targetEmail:    to,
   }
   try {
     const result = await sendEmail({
       to,
       subject: 'MEGA — Email Test',
-      html: '<p>This is a test email from MEGA Digital Menu. If you see this, email is working!</p>',
-      text: 'This is a test email from MEGA Digital Menu. If you see this, email is working!',
+      html: '<p>This is a test email from MEGA Digital Menu. Email is working! ✅</p>',
+      text: 'This is a test email from MEGA Digital Menu. Email is working!',
     })
     res.json({ config, result })
   } catch (err) {

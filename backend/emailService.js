@@ -1,33 +1,37 @@
 /**
  * emailService.js — MEGA Digital Menu
  *
- * Sends via Brevo SMTP (nodemailer) using the SMTP credentials.
- * The SMTP_USER (bc0aa6001@smtp-brevo.com) is the authorized sender.
+ * Uses Brevo Transactional Email HTTP API (v3).
  *
- * Required env vars:
- *   SMTP_HOST=smtp-relay.brevo.com
- *   SMTP_PORT=587
- *   SMTP_USER=bc0aa6001@smtp-brevo.com
- *   SMTP_PASS=xsmtpsib-...
- *   SMTP_FROM=MEGA Digital Menu <bc0aa6001@smtp-brevo.com>
+ * Required env vars (set in AletCloud Variables tab):
+ *   BREVO_API_KEY   — your Brevo API key (xsmtpsib-...)
+ *   BREVO_SENDER    — sender email (must be your verified Brevo SMTP login)
  *
- * Optional — Brevo HTTP API (only works if sender domain is verified in Brevo):
- *   BREVO_API_KEY=xsmtpsib-...
+ * The BREVO_API_KEY and BREVO_SENDER are read at runtime from env vars.
+ * Set them in AletCloud → your app → Variables / Environment tab.
  */
 
 const https = require('https')
 
+// ── Resolve sender: use BREVO_SENDER or fall back to SMTP_USER ───────────────
+function getSender() {
+  return process.env.BREVO_SENDER || process.env.SMTP_USER || ''
+}
+
+function getApiKey() {
+  return process.env.BREVO_API_KEY || ''
+}
+
 // ── Send via Brevo HTTP API ───────────────────────────────────────────────────
 async function sendViaBrevoApi({ to, subject, html, text }) {
-  const apiKey = process.env.BREVO_API_KEY
-  if (!apiKey) throw new Error('BREVO_API_KEY not set')
+  const apiKey     = getApiKey()
+  const senderEmail = getSender()
 
-  // Always use SMTP_USER as sender — it's the pre-authorized Brevo address
-  const fromEmail = process.env.SMTP_USER || 'bc0aa6001@smtp-brevo.com'
-  const fromName  = 'MEGA Digital Menu'
+  if (!apiKey)        throw new Error('BREVO_API_KEY env var not set')
+  if (!senderEmail)   throw new Error('BREVO_SENDER (or SMTP_USER) env var not set')
 
   const body = JSON.stringify({
-    sender:      { name: fromName, email: fromEmail },
+    sender:      { name: 'MEGA Digital Menu', email: senderEmail },
     to:          [{ email: to }],
     subject,
     htmlContent: html || `<pre>${text}</pre>`,
@@ -65,21 +69,16 @@ async function sendViaBrevoApi({ to, subject, html, text }) {
   })
 }
 
-// ── Send via nodemailer SMTP ──────────────────────────────────────────────────
+// ── Send via Brevo SMTP (nodemailer fallback) ─────────────────────────────────
 async function sendViaSMTP({ to, subject, html, text }) {
-  const nodemailer = require('nodemailer')
+  const nodemailer  = require('nodemailer')
+  const smtpUser    = process.env.SMTP_USER
+  const smtpPass    = process.env.SMTP_PASS
+  const smtpHost    = process.env.SMTP_HOST || 'smtp-relay.brevo.com'
+  const smtpPort    = parseInt(process.env.SMTP_PORT || '587')
+  const senderEmail = getSender()
 
-  const smtpHost = process.env.SMTP_HOST || 'smtp-relay.brevo.com'
-  const smtpPort = parseInt(process.env.SMTP_PORT || '587')
-  const smtpUser = process.env.SMTP_USER
-  const smtpPass = process.env.SMTP_PASS
-
-  if (!smtpUser || !smtpPass) {
-    throw new Error('SMTP_USER and SMTP_PASS are required for SMTP delivery')
-  }
-
-  // The from address MUST be the SMTP_USER for Brevo relay
-  const from = `MEGA Digital Menu <${smtpUser}>`
+  if (!smtpUser || !smtpPass) throw new Error('SMTP_USER / SMTP_PASS env vars not set')
 
   const transport = nodemailer.createTransport({
     host:   smtpHost,
@@ -92,45 +91,54 @@ async function sendViaSMTP({ to, subject, html, text }) {
     socketTimeout:     15000,
   })
 
-  const info = await transport.sendMail({ from, to, subject, html, text })
+  const info = await transport.sendMail({
+    from: `MEGA Digital Menu <${senderEmail || smtpUser}>`,
+    to, subject, html, text,
+  })
   return { ok: true, messageId: info.messageId }
 }
 
-// ── Main sendEmail function ───────────────────────────────────────────────────
+// ── Main sendEmail ────────────────────────────────────────────────────────────
 async function sendEmail({ to, subject, html, text }) {
-  console.log(`📧 Attempting to send email to ${to}`)
-  console.log(`📧 Config: BREVO_API_KEY=${process.env.BREVO_API_KEY ? 'SET' : 'NOT SET'} | SMTP_USER=${process.env.SMTP_USER || 'NOT SET'} | SMTP_PASS=${process.env.SMTP_PASS ? 'SET' : 'NOT SET'}`)
+  const apiKey      = getApiKey()
+  const senderEmail = getSender()
+  console.log(`📧 Sending to ${to} | BREVO_API_KEY=${apiKey ? 'SET' : 'NOT SET'} | sender=${senderEmail || 'NOT SET'}`)
 
-  // Try Brevo HTTP API first (uses SMTP_USER as sender — always authorized)
-  if (process.env.BREVO_API_KEY) {
+  // Try HTTP API first
+  if (apiKey && senderEmail) {
     try {
       const result = await sendViaBrevoApi({ to, subject, html, text })
-      console.log(`📧 Brevo HTTP API ✅ sent to ${to} — messageId: ${result.messageId}`)
+      console.log(`📧 Brevo API ✅ sent to ${to}`)
       return { ok: true, messageId: result.messageId }
-    } catch (err) {
-      console.error(`📧 Brevo HTTP API ❌ failed: ${err.message}`)
-      // Fall through to SMTP
+    } catch (apiErr) {
+      console.error(`📧 Brevo API ❌ ${apiErr.message}`)
     }
   }
 
-  // Try Brevo SMTP
+  // Try SMTP fallback
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
       const result = await sendViaSMTP({ to, subject, html, text })
       console.log(`📧 Brevo SMTP ✅ sent to ${to}`)
       return result
-    } catch (err) {
-      console.error(`📧 Brevo SMTP ❌ failed: ${err.message}`)
-      return { ok: false, error: `SMTP error: ${err.message}` }
+    } catch (smtpErr) {
+      console.error(`📧 Brevo SMTP ❌ ${smtpErr.message}`)
+      return { ok: false, error: smtpErr.message }
     }
   }
 
-  console.error('📧 No email credentials configured. Set BREVO_API_KEY or SMTP_USER/PASS in environment variables.')
-  return { ok: false, error: 'No email provider configured' }
+  const missing = []
+  if (!apiKey)      missing.push('BREVO_API_KEY')
+  if (!senderEmail) missing.push('BREVO_SENDER')
+  if (!process.env.SMTP_USER) missing.push('SMTP_USER')
+  if (!process.env.SMTP_PASS) missing.push('SMTP_PASS')
+
+  const errMsg = `Email not configured. Missing env vars: ${missing.join(', ')}. Set them in AletCloud → Variables tab.`
+  console.error(`📧 ❌ ${errMsg}`)
+  return { ok: false, error: errMsg }
 }
 
-// ── Email templates ───────────────────────────────────────────────────────────
-
+// ── OTP email template ────────────────────────────────────────────────────────
 function otpEmailHtml(otp, restaurantName) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -182,6 +190,7 @@ function otpEmailHtml(otp, restaurantName) {
 </html>`
 }
 
+// ── Welcome email template ────────────────────────────────────────────────────
 function welcomeEmailHtml({ restaurantName, adminName, slug }) {
   const menuUrl  = `https://digital-menu.app.aletcloud.com/r/${slug}/menu`
   const adminUrl = `https://digital-menu.app.aletcloud.com/admin`
