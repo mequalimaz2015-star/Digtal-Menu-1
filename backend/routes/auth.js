@@ -59,7 +59,7 @@ router.post('/login', async (req, res) => {
     try {
       const result = await query(
         `SELECT u.*, t.slug as tenant_slug, t.name as tenant_name, t.status as tenant_status
-         FROM users u
+         FROM users u  
          LEFT JOIN tenants t ON u.tenant_id = t.id
          WHERE LOWER(u.email) = $1 AND (u.is_active = 1 OR u.is_active = 0 OR u.is_active IS NULL)`,
         [cleanEmail]

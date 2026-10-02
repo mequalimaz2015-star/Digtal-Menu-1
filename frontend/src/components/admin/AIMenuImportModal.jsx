@@ -57,6 +57,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
   const [dragOver, setDragOver]   = useState(false)
   const [loading, setLoading]     = useState(false)
   const [loadMsg, setLoadMsg]     = useState('')
+  const [analyseError, setAnalyseError] = useState(null) // { message, noApiKey }
   const [preview, setPreview]     = useState(null)        // { categories, items }
   const [items, setItems]         = useState([])          // editable items
   const [categories, setCategories] = useState([])
@@ -75,6 +76,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
   const handleFile = useCallback((f) => {
     if (!f) return
     setFile(f)
+    setAnalyseError(null)
   }, [])
 
   const onDrop = (e) => {
@@ -88,6 +90,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
   const analyse = async () => {
     if (!file) return
     setLoading(true)
+    setAnalyseError(null)
     setLoadMsg(mode === 'image' ? '🔍 AI is scanning your menu image…' : '📊 Parsing your spreadsheet…')
 
     const form = new FormData()
@@ -110,8 +113,14 @@ export default function AIMenuImportModal({ onClose, onImported }) {
       setCategories(data.categories || [])
       setStep(2)
     } catch (err) {
-      const msg = err.response?.data?.error || err.message
-      toast.error(`Analysis failed: ${msg}`)
+      const data = err.response?.data || {}
+      const msg = data.error || err.message
+      if (data.noApiKey) {
+        setAnalyseError({ message: msg, noApiKey: true })
+      } else {
+        setAnalyseError({ message: `Analysis failed: ${msg}`, noApiKey: false })
+        toast.error(`Analysis failed: ${msg}`)
+      }
     }
     setLoading(false)
   }
@@ -195,7 +204,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => { setMode('image'); setStep(1) }}
+                  onClick={() => { setMode('image'); setStep(1); setAnalyseError(null) }}
                   className="group relative bg-slate-900 border-2 border-slate-700 hover:border-amber-500 rounded-2xl p-6 text-left transition-all"
                 >
                   <div className="absolute top-4 right-4 text-[10px] font-bold px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full border border-amber-500/30">
@@ -217,7 +226,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => { setMode('excel'); setStep(1) }}
+                  onClick={() => { setMode('excel'); setStep(1); setAnalyseError(null) }}
                   className="group bg-slate-900 border-2 border-slate-700 hover:border-emerald-500 rounded-2xl p-6 text-left transition-all"
                 >
                   <div className="w-14 h-14 bg-gradient-to-br from-emerald-400/20 to-teal-600/20 rounded-2xl flex items-center justify-center text-3xl mb-4">
@@ -253,7 +262,7 @@ export default function AIMenuImportModal({ onClose, onImported }) {
           {/* ── STEP 1: Upload file ── */}
           {step === 1 && (
             <div className="space-y-5">
-              <button onClick={() => { setStep(0); setFile(null) }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1 transition-colors">
+              <button onClick={() => { setStep(0); setFile(null); setAnalyseError(null) }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1 transition-colors">
                 ← Back
               </button>
 
@@ -341,6 +350,33 @@ export default function AIMenuImportModal({ onClose, onImported }) {
               {loading && (
                 <div className="text-center py-4">
                   <p className="text-amber-400 text-sm font-semibold animate-pulse">{loadMsg}</p>
+                </div>
+              )}
+
+              {/* Error message (incl. no API key) */}
+              {analyseError && (
+                <div className={`p-4 border rounded-xl text-sm space-y-2 ${analyseError.noApiKey ? 'bg-red-500/10 border-red-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{analyseError.noApiKey ? '🔑' : '❌'}</span>
+                    <p className="text-red-400 font-bold text-sm">
+                      {analyseError.noApiKey ? 'Gemini API Key Required' : 'Analysis Failed'}
+                    </p>
+                  </div>
+                  {analyseError.noApiKey ? (
+                    <div className="text-slate-300 text-xs space-y-2">
+                      <p>AI image scanning requires a free Google Gemini API key.</p>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-400">
+                        <li>Get a free key at <span className="text-amber-400 font-mono">aistudio.google.com/app/apikey</span></li>
+                        <li>Add it to your backend <span className="text-amber-400 font-mono">.env</span> file:</li>
+                      </ol>
+                      <div className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-xs text-emerald-400">
+                        GEMINI_API_KEY=your-key-here
+                      </div>
+                      <p className="text-slate-500">Or switch to <strong className="text-white">Excel/CSV import</strong> which works without a key.</p>
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-xs">{analyseError.message}</p>
+                  )}
                 </div>
               )}
             </div>

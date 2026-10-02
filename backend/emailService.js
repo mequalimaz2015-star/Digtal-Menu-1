@@ -104,19 +104,34 @@ async function sendEmail({ to, subject, html, text }) {
       return { ok: true, messageId: result.messageId }
     } catch (err) {
       console.error(`📧 Brevo API ❌ failed: ${err.message}`)
+      // If Brevo API failed (e.g. sender domain not verified), try SMTP fallback
+      if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+        try {
+          const result = await sendViaSMTP({ to, subject, html, text })
+          console.log(`📧 SMTP fallback ✅ sent to ${to}`)
+          return result
+        } catch (smtpErr) {
+          console.error(`📧 SMTP fallback ❌ failed: ${smtpErr.message}`)
+        }
+      }
       return { ok: false, error: err.message }
     }
   }
 
   // Fall back to SMTP
-  try {
-    const result = await sendViaSMTP({ to, subject, html, text })
-    console.log(`📧 SMTP ✅ sent to ${to}`)
-    return result
-  } catch (err) {
-    console.error(`📧 SMTP ❌ failed: ${err.message}`)
-    return { ok: false, error: err.message }
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const result = await sendViaSMTP({ to, subject, html, text })
+      console.log(`📧 SMTP ✅ sent to ${to}`)
+      return result
+    } catch (err) {
+      console.error(`📧 SMTP ❌ failed: ${err.message}`)
+      return { ok: false, error: err.message }
+    }
   }
+
+  console.error('📧 No email credentials configured (BREVO_API_KEY or SMTP_USER/PASS required)')
+  return { ok: false, error: 'No email provider configured' }
 }
 
 // ── Email templates ───────────────────────────────────────────────────────────

@@ -179,15 +179,10 @@ router.post('/analyze-image', requireAuth, requireRole(['admin']), upload.single
     const model = getGeminiModel()
 
     if (!model) {
-      // No API key — return a helpful demo structure so the UI still works
-      return res.json({
-        source: 'demo',
-        warning: 'No GEMINI_API_KEY set. Showing sample output. Add your key in backend/.env to enable real AI analysis.',
-        ...buildPreview([
-          { categoryName: 'Main Dishes', name: 'Sample Dish 1', description: 'Auto-detected from image', price: 150, isSpicy: false, isVegetarian: false },
-          { categoryName: 'Main Dishes', name: 'Sample Dish 2', description: 'Auto-detected from image', price: 200, isSpicy: true,  isVegetarian: false },
-          { categoryName: 'Beverages',  name: 'Sample Drink',  description: 'Auto-detected from image', price: 50,  isSpicy: false, isVegetarian: true  },
-        ]),
+      // No API key — return a clear error so the user knows what to do
+      return res.status(400).json({
+        error: 'AI image analysis requires a Gemini API key. Please add GEMINI_API_KEY to your backend .env file. You can get a free key at https://aistudio.google.com/app/apikey',
+        noApiKey: true,
       })
     }
 

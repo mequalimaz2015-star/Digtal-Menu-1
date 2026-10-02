@@ -52,7 +52,7 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), checkS
     let newId = ins.insertId ? Number(ins.insertId) : null
     if (!newId) {
       const sel = await query(
-        `SELECT TOP 1 id FROM users WHERE tenant_id=$1 AND LOWER(email)=LOWER($2) ORDER BY id DESC`,
+        `SELECT id FROM users WHERE tenant_id=$1 AND LOWER(email)=LOWER($2) ORDER BY id DESC LIMIT 1`,
         [req.tenantId, email]
       )
       newId = sel.rows[0] ? Number(sel.rows[0].id) : null

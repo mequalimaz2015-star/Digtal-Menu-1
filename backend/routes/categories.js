@@ -52,7 +52,7 @@ router.post('/', requireAuth, requireTenantMatch, requireRole(['admin']), async 
       let newId = ins.insertId ? Number(ins.insertId) : null
       if (!newId) {
         const sel = await query(
-          `SELECT TOP 1 id FROM categories WHERE tenant_id=$1 AND name=$2 ORDER BY id DESC`,
+          `SELECT id FROM categories WHERE tenant_id=$1 AND name=$2 ORDER BY id DESC LIMIT 1`,
           [req.tenantId, name]
         )
         newId = sel.rows[0] ? Number(sel.rows[0].id) : null
