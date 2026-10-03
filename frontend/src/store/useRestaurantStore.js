@@ -108,6 +108,8 @@ export const useRestaurantStore = create(
             vatRate:          vatDecimal,
             serviceChargeRate: svcDecimal,
             currency:         formData.currency,
+            logo:             formData.logoUrl  ?? s.info.logo,
+            coverImage:       formData.coverUrl ?? s.info.coverImage,
           }
         }))
 
@@ -124,6 +126,8 @@ export const useRestaurantStore = create(
             vat_rate:            vatDecimal,
             service_charge_rate: svcDecimal,
             currency:            formData.currency,
+            logo_url:            formData.logoUrl,
+            cover_url:           formData.coverUrl,
           })
           return res.status === 200
         } catch (_) {

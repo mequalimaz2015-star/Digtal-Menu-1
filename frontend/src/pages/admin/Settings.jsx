@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { FiSave, FiRefreshCw, FiZap, FiCheck, FiShield, FiAlertTriangle, FiCreditCard } from 'react-icons/fi'
+import { FiSave, FiRefreshCw, FiZap, FiCheck, FiShield, FiAlertTriangle, FiCreditCard, FiUpload, FiX, FiImage } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { useRestaurantStore } from '../../store/useRestaurantStore'
 import client from '../../api/client'
@@ -12,6 +12,8 @@ export default function Settings() {
   const [tenant, setTenant] = useState(null)
   const [plans, setPlans] = useState([])
   const [activeTab, setActiveTab] = useState('general')
+  const logoInputRef  = useRef(null)
+  const coverInputRef = useRef(null)
 
   const [form, setForm] = useState({
     name: info.name || 'MEGA Digital Menu',
@@ -24,6 +26,8 @@ export default function Settings() {
     vatRate: Math.round((info.vatRate ?? 0.15) * 100),
     serviceCharge: Math.round((info.serviceChargeRate ?? 0.10) * 100),
     currency: info.currency || 'ETB',
+    logoUrl: info.logo || '',
+    coverUrl: info.coverImage || '',
   })
   const [saving, setSaving] = useState(false)
   const [upgrading, setUpgrading] = useState(false)
@@ -57,8 +61,30 @@ export default function Settings() {
       vatRate: Math.round((info.vatRate ?? 0.15) * 100),
       serviceCharge: Math.round((info.serviceChargeRate ?? 0.10) * 100),
       currency: info.currency || 'ETB',
+      logoUrl: info.logo || '',
+      coverUrl: info.coverImage || '',
     })
   }, [info])
+
+  // ── Image file → base64 data URL ─────────────────────────────────────────
+  const handleImageFile = (file, field, maxW) => {
+    if (!file || !file.type.startsWith('image/')) { toast.error('Please select an image file'); return }
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let w = img.width, h = img.height
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW }
+        canvas.width = w; canvas.height = h
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+        setForm(f => ({ ...f, [field]: canvas.toDataURL('image/jpeg', 0.88) }))
+        toast.success('Image uploaded!')
+      }
+      img.src = evt.target.result
+    }
+    reader.readAsDataURL(file)
+  }
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error('Restaurant name is required'); return }
@@ -149,6 +175,120 @@ export default function Settings() {
             <div><label className="label">Phone</label><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="input-field" /></div>
             <div><label className="label">WiFi Password</label><input value={form.wifi} onChange={e => setForm({ ...form, wifi: e.target.value })} className="input-field" /></div>
             <div><label className="label">Working Hours</label><input value={form.hours} onChange={e => setForm({ ...form, hours: e.target.value })} className="input-field" /></div>
+          </div>
+
+          {/* ── Branding: Logo + Cover Image ── */}
+          <div className="card space-y-5 lg:col-span-2">
+            <h2 className="font-bold text-gray-900 dark:text-white text-lg">🎨 Branding — Logo & Cover Image</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">
+              These appear on your customer-facing menu page. Upload a file or paste a URL.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+              {/* Logo */}
+              <div className="space-y-3">
+                <label className="label">Restaurant Logo</label>
+                <p className="text-xs text-gray-400">Shown in the top-left corner of your menu. Square image recommended (1:1).</p>
+
+                {/* Preview + upload button */}
+                <div className="flex items-center gap-4">
+                  <div
+                    className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0 cursor-pointer hover:border-orange-500 transition-all relative group"
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    {form.logoUrl ? (
+                      <>
+                        <img src={form.logoUrl} alt="Logo preview" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-xs transition-opacity">
+                          <FiUpload size={16} /><span className="mt-1">Change</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-gray-400 group-hover:text-orange-500 transition-colors">
+                        <FiImage size={22} />
+                        <span className="text-[10px] font-bold uppercase">Upload</span>
+                      </div>
+                    )}
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => handleImageFile(e.target.files[0], 'logoUrl', 400)}
+                    />
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <input
+                      value={form.logoUrl}
+                      onChange={e => setForm({ ...form, logoUrl: e.target.value })}
+                      placeholder="Or paste image URL…"
+                      className="input-field text-xs"
+                    />
+                    {form.logoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, logoUrl: '' })}
+                        className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
+                      >
+                        <FiX size={12} /> Remove logo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cover Image */}
+              <div className="space-y-3">
+                <label className="label">Cover / Hero Image</label>
+                <p className="text-xs text-gray-400">Full-width banner shown on your menu home page. Wide image recommended (16:9 or wider).</p>
+
+                <div
+                  className="w-full h-24 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center cursor-pointer hover:border-orange-500 transition-all relative group"
+                  onClick={() => coverInputRef.current?.click()}
+                >
+                  {form.coverUrl ? (
+                    <>
+                      <img src={form.coverUrl} alt="Cover preview" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-xs transition-opacity">
+                        <FiUpload size={16} /><span className="mt-1">Change Cover</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 text-gray-400 group-hover:text-orange-500 transition-colors">
+                      <FiImage size={24} />
+                      <span className="text-xs font-bold">Click to upload cover image</span>
+                    </div>
+                  )}
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => handleImageFile(e.target.files[0], 'coverUrl', 1400)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <input
+                    value={form.coverUrl}
+                    onChange={e => setForm({ ...form, coverUrl: e.target.value })}
+                    placeholder="Or paste cover image URL…"
+                    className="input-field text-xs"
+                  />
+                  {form.coverUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, coverUrl: '' })}
+                      className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
+                    >
+                      <FiX size={12} /> Remove cover
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="card space-y-4">

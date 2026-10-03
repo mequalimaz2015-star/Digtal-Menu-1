@@ -34,18 +34,33 @@ router.get('/', async (req, res) => {
 // PUT /api/restaurant
 router.put('/', requireAuth, requireTenantMatch, requireRole(['admin']), async (req, res) => {
   try {
-    const { name, name_am, tagline, description, address, phone, wifi_password, working_hours, vat_rate, service_charge_rate, currency } = req.body
+    const {
+      name, name_am, tagline, description, address, phone,
+      wifi_password, working_hours, vat_rate, service_charge_rate,
+      currency, logo_url, cover_url,
+    } = req.body
 
     try {
       await query(`
         UPDATE tenants SET
-          name=COALESCE($1, name), name_am=COALESCE($2, name_am), tagline=COALESCE($3, tagline), 
-          description=COALESCE($4, description), address=COALESCE($5, address), phone=COALESCE($6, phone),
-          wifi_password=COALESCE($7, wifi_password), working_hours=COALESCE($8, working_hours), 
-          vat_rate=COALESCE($9, vat_rate), service_charge_rate=COALESCE($10, service_charge_rate), 
-          currency=COALESCE($11, currency), updated_at=NOW()
-        WHERE id=$12
-      `, [name, name_am, tagline, description, address, phone, wifi_password, working_hours, vat_rate, service_charge_rate, currency, req.tenantId])
+          name=COALESCE($1, name), name_am=COALESCE($2, name_am),
+          tagline=COALESCE($3, tagline), description=COALESCE($4, description),
+          address=COALESCE($5, address), phone=COALESCE($6, phone),
+          wifi_password=COALESCE($7, wifi_password), working_hours=COALESCE($8, working_hours),
+          vat_rate=COALESCE($9, vat_rate), service_charge_rate=COALESCE($10, service_charge_rate),
+          currency=COALESCE($11, currency),
+          logo_url=COALESCE($12, logo_url),
+          cover_url=COALESCE($13, cover_url),
+          updated_at=GETDATE()
+        WHERE id=$14
+      `, [
+        name, name_am, tagline, description, address, phone,
+        wifi_password, working_hours, vat_rate, service_charge_rate,
+        currency,
+        logo_url  !== undefined ? logo_url  : null,
+        cover_url !== undefined ? cover_url : null,
+        req.tenantId,
+      ])
 
       const result = await query(`SELECT * FROM tenants WHERE id = $1`, [req.tenantId])
       if (result.rows[0]) return res.json(result.rows[0])
@@ -65,6 +80,8 @@ router.put('/', requireAuth, requireTenantMatch, requireRole(['admin']), async (
       ...(vat_rate !== undefined && { vat_rate }),
       ...(service_charge_rate !== undefined && { service_charge_rate }),
       ...(currency !== undefined && { currency }),
+      ...(logo_url !== undefined && { logo_url }),
+      ...(cover_url !== undefined && { cover_url }),
     })
 
     res.json(updated || { id: req.tenantId, name })

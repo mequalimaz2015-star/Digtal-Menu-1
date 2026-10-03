@@ -82,8 +82,21 @@ export default function Header({
 
           {/* Logo + Name */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 shrink-0 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center text-lg shadow-md shadow-orange-200 dark:shadow-none">
-              🍽️
+            <div className="w-9 h-9 shrink-0 rounded-xl overflow-hidden shadow-md shadow-orange-200 dark:shadow-none bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-lg">
+              {restaurant?.logo ? (
+                <img
+                  src={restaurant.logo}
+                  alt={restaurant.name || 'Logo'}
+                  className="w-full h-full object-cover"
+                  onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
+                />
+              ) : null}
+              <span
+                className="w-full h-full flex items-center justify-center text-lg"
+                style={{ display: restaurant?.logo ? 'none' : 'flex' }}
+              >
+                🍽️
+              </span>
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">
