@@ -202,6 +202,14 @@ export default function AdminLayout() {
 
         {/* Bottom actions */}
         <div className="p-3 border-t border-gray-100 dark:border-gray-800 space-y-1">
+          {/* Version badge */}
+          <div className="flex items-center justify-between px-3 py-1.5 mb-1">
+            <span className="text-[10px] text-gray-400 dark:text-gray-600 font-mono">v1.0.1.12</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live
+            </span>
+          </div>
           {/* Waiter mode link — only for admin and waiter role */}
           {(role === 'admin' || role === 'waiter') && (
             <a href="/waiter" target="_blank" rel="noopener"

@@ -755,7 +755,14 @@ export default function LandingPage() {
           </div>
           <div className={`border-t ${dark ? 'border-slate-800' : 'border-gray-200'} pt-6 flex flex-col sm:flex-row items-center justify-between gap-4`}>
             <p className={`${textSm} text-xs`}>© {new Date().getFullYear()} MEGA Digital Menu. All rights reserved.</p>
-            <div className="flex gap-4">
+            <div className="flex items-center gap-4">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-gray-400">
+                v1.0.1.12
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live
+                </span>
+              </span>
               {['Privacy Policy','Terms of Service'].map(l => (
                 <a key={l} href="#" className={`${textSm} hover:text-amber-500 text-xs transition-colors`}>{l}</a>
               ))}

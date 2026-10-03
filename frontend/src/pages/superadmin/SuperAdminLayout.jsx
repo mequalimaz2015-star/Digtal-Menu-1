@@ -116,6 +116,14 @@ export default function SuperAdminLayout() {
 
         {/* Bottom actions */}
         <div className="p-3 border-t border-slate-800 space-y-1">
+          {/* Version badge */}
+          <div className="flex items-center justify-between px-3 py-1.5 mb-1">
+            <span className="text-[10px] text-slate-600 font-mono">v1.0.1.12</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live
+            </span>
+          </div>
           <a
             href="/register-tenant"
             target="_blank"
