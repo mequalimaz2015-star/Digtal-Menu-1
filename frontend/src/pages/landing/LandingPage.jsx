@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { io } from 'socket.io-client'
+import { FiSun, FiMoon } from 'react-icons/fi'
 
 const NAV_LINKS = [
   { label: 'Home',     href: '#home' },
@@ -264,6 +265,28 @@ export default function LandingPage() {
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
   const [contactSent, setContactSent] = useState(false)
   const [contactSending, setContactSending] = useState(false)
+  const [dark, setDark] = useState(() => {
+    // Persist preference
+    const saved = localStorage.getItem('landing-dark')
+    return saved !== null ? saved === 'true' : true // default: dark
+  })
+
+  useEffect(() => {
+    localStorage.setItem('landing-dark', String(dark))
+  }, [dark])
+
+  // Theme shorthand helpers
+  const bg      = dark ? 'bg-slate-950'      : 'bg-white'
+  const bgCard  = dark ? 'bg-slate-900'      : 'bg-gray-50'
+  const bgCard2 = dark ? 'bg-slate-900/50'   : 'bg-gray-100/70'
+  const text    = dark ? 'text-slate-100'    : 'text-gray-900'
+  const textMd  = dark ? 'text-slate-400'    : 'text-gray-500'
+  const textSm  = dark ? 'text-slate-500'    : 'text-gray-400'
+  const border  = dark ? 'border-slate-800'  : 'border-gray-200'
+  const border2 = dark ? 'border-slate-700'  : 'border-gray-300'
+  const navBg   = dark ? 'bg-slate-950/90'   : 'bg-white/90'
+  const navBorder = dark ? 'border-slate-800' : 'border-gray-200'
+  const inputBg = dark ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
 
   // Wire contact form to the real platform-chat API so superadmin sees it
   const handleContact = async (e) => {
@@ -288,10 +311,10 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+    <div className={`min-h-screen ${bg} ${text} font-sans transition-colors duration-300`}>
 
       {/* ── NAVBAR ── */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800">
+      <header className={`fixed top-0 left-0 right-0 z-50 ${navBg} backdrop-blur-xl border-b ${navBorder}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
@@ -306,13 +329,37 @@ export default function LandingPage() {
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-6">
               {NAV_LINKS.map(l => (
-                <a key={l.label} href={l.href} className="text-sm text-slate-400 hover:text-white transition-colors font-medium">{l.label}</a>
+                <a key={l.label} href={l.href} className={`text-sm ${textMd} hover:text-amber-500 transition-colors font-medium`}>{l.label}</a>
               ))}
             </nav>
 
-            {/* CTA buttons */}
-            <div className="hidden md:flex items-center gap-3">
-              <Link to="/admin/login" className="text-sm font-semibold text-slate-300 hover:text-white px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors">
+            {/* CTA + Theme Toggle */}
+            <div className="hidden md:flex items-center gap-2">
+              {/* Dark/Light toggle — THIS is what was in the red box */}
+              <motion.button
+                whileTap={{ scale: 0.88 }}
+                onClick={() => setDark(d => !d)}
+                title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                  dark
+                    ? 'bg-slate-800 text-amber-400 hover:bg-slate-700'
+                    : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
+                }`}
+              >
+                <AnimatePresence mode="wait">
+                  {dark ? (
+                    <motion.span key="sun" initial={{ rotate: -90, scale: 0 }} animate={{ rotate: 0, scale: 1 }} exit={{ rotate: 90, scale: 0 }} transition={{ duration: 0.2 }}>
+                      <FiSun size={17} />
+                    </motion.span>
+                  ) : (
+                    <motion.span key="moon" initial={{ rotate: 90, scale: 0 }} animate={{ rotate: 0, scale: 1 }} exit={{ rotate: -90, scale: 0 }} transition={{ duration: 0.2 }}>
+                      <FiMoon size={17} />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+
+              <Link to="/admin/login" className={`text-sm font-semibold ${textMd} hover:text-amber-500 px-4 py-2 rounded-xl hover:${dark ? 'bg-slate-800' : 'bg-gray-100'} transition-colors`}>
                 Sign In
               </Link>
               <Link to="/register-tenant" className="text-sm font-bold px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 rounded-xl shadow-lg shadow-amber-500/25 transition-all">
@@ -320,12 +367,20 @@ export default function LandingPage() {
               </Link>
             </div>
 
-            {/* Mobile hamburger */}
-            <button onClick={() => setMenuOpen(!menuOpen)} className="md:hidden w-9 h-9 flex flex-col items-center justify-center gap-1.5">
-              <span className={`w-5 h-0.5 bg-white transition-all ${menuOpen ? 'rotate-45 translate-y-2' : ''}`} />
-              <span className={`w-5 h-0.5 bg-white transition-all ${menuOpen ? 'opacity-0' : ''}`} />
-              <span className={`w-5 h-0.5 bg-white transition-all ${menuOpen ? '-rotate-45 -translate-y-2' : ''}`} />
-            </button>
+            {/* Mobile: theme toggle + hamburger */}
+            <div className="md:hidden flex items-center gap-2">
+              <button
+                onClick={() => setDark(d => !d)}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${dark ? 'bg-slate-800 text-amber-400' : 'bg-gray-100 text-slate-600'}`}
+              >
+                {dark ? <FiSun size={17} /> : <FiMoon size={17} />}
+              </button>
+              <button onClick={() => setMenuOpen(!menuOpen)} className="w-9 h-9 flex flex-col items-center justify-center gap-1.5">
+                <span className={`w-5 h-0.5 ${dark ? 'bg-white' : 'bg-gray-800'} transition-all ${menuOpen ? 'rotate-45 translate-y-2' : ''}`} />
+                <span className={`w-5 h-0.5 ${dark ? 'bg-white' : 'bg-gray-800'} transition-all ${menuOpen ? 'opacity-0' : ''}`} />
+                <span className={`w-5 h-0.5 ${dark ? 'bg-white' : 'bg-gray-800'} transition-all ${menuOpen ? '-rotate-45 -translate-y-2' : ''}`} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -333,16 +388,16 @@ export default function LandingPage() {
         <AnimatePresence>
           {menuOpen && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-              className="md:hidden overflow-hidden bg-slate-900 border-t border-slate-800">
+              className={`md:hidden overflow-hidden ${dark ? 'bg-slate-900' : 'bg-white'} border-t ${navBorder}`}>
               <div className="px-4 py-4 space-y-2">
                 {NAV_LINKS.map(l => (
                   <a key={l.label} href={l.href} onClick={() => setMenuOpen(false)}
-                    className="block px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors font-medium">
+                    className={`block px-4 py-2.5 ${textMd} hover:text-amber-500 ${dark ? 'hover:bg-slate-800' : 'hover:bg-gray-50'} rounded-xl transition-colors font-medium`}>
                     {l.label}
                   </a>
                 ))}
                 <div className="flex gap-2 pt-2">
-                  <Link to="/admin/login" className="flex-1 text-center py-2.5 border border-slate-700 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">Sign In</Link>
+                  <Link to="/admin/login" className={`flex-1 text-center py-2.5 border ${border2} ${text} rounded-xl text-sm font-semibold ${dark ? 'hover:bg-slate-800' : 'hover:bg-gray-50'} transition-colors`}>Sign In</Link>
                   <Link to="/register-tenant" className="flex-1 text-center py-2.5 bg-amber-500 text-slate-950 rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors">Sign Up Free</Link>
                 </div>
               </div>
@@ -362,16 +417,16 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center max-w-4xl mx-auto">
             <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-bold uppercase tracking-widest mb-6">
+              <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full ${dark ? 'bg-amber-500/10 border-amber-500/25 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-600'} border text-xs font-bold uppercase tracking-widest mb-6`}>
                 🚀 Ethiopia's #1 Digital Menu Platform
               </span>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight mb-6">
+              <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-black leading-tight mb-6 ${text}`}>
                 Take Your Restaurant<br />
                 <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
                   Fully Digital
                 </span>
               </h1>
-              <p className="text-lg text-slate-400 leading-relaxed mb-10 max-w-2xl mx-auto">
+              <p className={`text-lg ${textMd} leading-relaxed mb-10 max-w-2xl mx-auto`}>
                 MEGA Digital Menu gives your restaurant a beautiful QR-based digital menu, real-time order management, kitchen display, and delivery — all in one platform. Set up in minutes.
               </p>
 
@@ -381,45 +436,43 @@ export default function LandingPage() {
                   <img src="/mega-logo.png" alt="" className="h-5 w-auto object-contain" aria-hidden="true" /> Start Free 14-Day Trial
                 </Link>
                 <a href="#features"
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 border border-slate-700 hover:border-slate-500 text-white font-semibold text-base rounded-2xl transition-all hover:bg-slate-800">
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 border ${border2} hover:border-amber-400 ${text} font-semibold text-base rounded-2xl transition-all ${dark ? 'hover:bg-slate-800' : 'hover:bg-gray-50'}`}>
                   See How It Works ↓
                 </a>
               </div>
 
-              <p className="text-xs text-slate-500 mt-4">No credit card required · Free trial · Cancel anytime</p>
+              <p className={`text-xs ${textSm} mt-4`}>No credit card required · Free trial · Cancel anytime</p>
             </motion.div>
           </div>
 
           {/* Hero mockup */}
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.3 }}
             className="mt-16 max-w-5xl mx-auto">
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-2 shadow-2xl shadow-black/50">
-              <div className="bg-slate-800 rounded-2xl p-4 sm:p-6">
-                {/* Fake browser chrome */}
+            <div className={`${dark ? 'bg-slate-900 border-slate-700' : 'bg-gray-100 border-gray-300'} border rounded-3xl p-2 shadow-2xl shadow-black/20`}>
+              <div className={`${dark ? 'bg-slate-800' : 'bg-white'} rounded-2xl p-4 sm:p-6`}>
                 <div className="flex items-center gap-2 mb-4">
                   <div className="flex gap-1.5"><div className="w-3 h-3 rounded-full bg-red-500"/><div className="w-3 h-3 rounded-full bg-yellow-500"/><div className="w-3 h-3 rounded-full bg-green-500"/></div>
-                  <div className="flex-1 bg-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-400 font-mono">digital-menu.app.aletcloud.com/r/your-restaurant</div>
+                  <div className={`flex-1 ${dark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500'} rounded-lg px-3 py-1.5 text-xs font-mono`}>digital-menu.app.aletcloud.com/r/your-restaurant</div>
                 </div>
-                {/* Dashboard preview */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                   {[['💰','Today Revenue','4,850 ETB'],['🛒','Active Orders','7'],['🪑','Occupied Tables','5/8'],['✅','Served Today','23']].map(([icon,label,val])=>(
-                    <div key={label} className="bg-slate-900 rounded-xl p-3 border border-slate-700">
+                    <div key={label} className={`${dark ? 'bg-slate-900 border-slate-700' : 'bg-gray-50 border-gray-200'} rounded-xl p-3 border`}>
                       <div className="text-xl mb-1">{icon}</div>
-                      <div className="text-xs text-slate-400">{label}</div>
-                      <div className="text-sm font-black text-white">{val}</div>
+                      <div className={`text-xs ${textMd}`}>{label}</div>
+                      <div className={`text-sm font-black ${text}`}>{val}</div>
                     </div>
                   ))}
                 </div>
-                <div className="bg-slate-900 rounded-xl p-4 border border-slate-700">
+                <div className={`${dark ? 'bg-slate-900 border-slate-700' : 'bg-gray-50 border-gray-200'} rounded-xl p-4 border`}>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-white">🔴 Live Orders</span>
+                    <span className={`text-xs font-bold ${text}`}>🔴 Live Orders</span>
                     <span className="text-xs text-green-400 font-semibold">● Live</span>
                   </div>
                   {[['ORD-4821','T3','Margherita Pizza × 1','preparing'],['ORD-4820','T7','Lamb Tibs × 2, Coffee × 2','ready'],['ORD-4819','T1','Buffalo Wings × 1','new']].map(([id,t,items,status])=>(
-                    <div key={id} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0 text-xs">
-                      <span className="font-bold text-slate-300">#{id.slice(-4)}</span>
+                    <div key={id} className={`flex items-center justify-between py-2 border-b ${border} last:border-0 text-xs`}>
+                      <span className={`font-bold ${dark ? 'text-slate-300' : 'text-gray-700'}`}>#{id.slice(-4)}</span>
                       <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">{t}</span>
-                      <span className="text-slate-400 flex-1 mx-3 truncate">{items}</span>
+                      <span className={`${textMd} flex-1 mx-3 truncate`}>{items}</span>
                       <span className={`px-2 py-0.5 rounded-full font-semibold capitalize ${status==='preparing'?'bg-yellow-500/20 text-yellow-400':status==='ready'?'bg-green-500/20 text-green-400':'bg-blue-500/20 text-blue-400'}`}>{status}</span>
                     </div>
                   ))}
@@ -431,21 +484,21 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEATURES ── */}
-      <section id="features" className="py-20 lg:py-28 bg-slate-900/50">
+      <section id="features" className={`py-20 lg:py-28 ${bgCard2}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">Everything Your Restaurant Needs</h2>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto">One platform. Zero paper menus. Happier customers.</p>
+            <h2 className={`text-3xl sm:text-4xl font-black ${text} mb-4`}>Everything Your Restaurant Needs</h2>
+            <p className={`${textMd} text-lg max-w-2xl mx-auto`}>One platform. Zero paper menus. Happier customers.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f, i) => (
               <motion.div key={f.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.07 }}
-                className="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-6 transition-all hover:shadow-lg hover:shadow-amber-500/5 group">
+                className={`${bgCard} border ${border} hover:border-amber-500/40 rounded-2xl p-6 transition-all hover:shadow-lg hover:shadow-amber-500/5 group`}>
                 <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
                   {f.icon}
                 </div>
-                <h3 className="text-white font-bold mb-2">{f.title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+                <h3 className={`${text} font-bold mb-2`}>{f.title}</h3>
+                <p className={`${textMd} text-sm leading-relaxed`}>{f.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -456,7 +509,7 @@ export default function LandingPage() {
       <section className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">Get Started in 3 Simple Steps</h2>
+            <h2 className={`text-3xl sm:text-4xl font-black ${text} mb-4`}>Get Started in 3 Simple Steps</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
@@ -470,8 +523,8 @@ export default function LandingPage() {
                   {s.icon}
                 </div>
                 <div className="text-xs font-black text-amber-500 uppercase tracking-widest mb-2">Step {s.step}</div>
-                <h3 className="text-white font-bold text-lg mb-2">{s.title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{s.desc}</p>
+                <h3 className={`${text} font-bold text-lg mb-2`}>{s.title}</h3>
+                <p className={`${textMd} text-sm leading-relaxed`}>{s.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -479,30 +532,30 @@ export default function LandingPage() {
       </section>
 
       {/* ── PRICING ── */}
-      <section id="pricing" className="py-20 lg:py-28 bg-slate-900/50">
+      <section id="pricing" className={`py-20 lg:py-28 ${bgCard2}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">Simple, Transparent Pricing</h2>
-            <p className="text-slate-400 text-lg">Start free. Scale when you're ready.</p>
+            <h2 className={`text-3xl sm:text-4xl font-black ${text} mb-4`}>Simple, Transparent Pricing</h2>
+            <p className={`${textMd} text-lg`}>Start free. Scale when you're ready.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {PRICING.map((plan, i) => (
               <motion.div key={plan.name} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                className={`relative bg-slate-900 border-2 ${plan.color} rounded-2xl p-7 ${plan.highlight ? 'shadow-2xl shadow-amber-500/20 scale-105' : ''}`}>
+                className={`relative ${bgCard} border-2 ${plan.color} rounded-2xl p-7 ${plan.highlight ? 'shadow-2xl shadow-amber-500/20 scale-105' : ''}`}>
                 {plan.badge && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 bg-amber-500 text-slate-950 text-xs font-black rounded-full uppercase tracking-wider">
                     {plan.badge}
                   </div>
                 )}
-                <h3 className="text-white font-black text-xl mb-1">{plan.name}</h3>
+                <h3 className={`${text} font-black text-xl mb-1`}>{plan.name}</h3>
                 <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-3xl font-black text-white">{plan.price}</span>
-                  <span className="text-slate-400 text-sm">{plan.period}</span>
+                  <span className={`text-3xl font-black ${text}`}>{plan.price}</span>
+                  <span className={`${textMd} text-sm`}>{plan.period}</span>
                 </div>
-                <div className="text-xs text-slate-500 mb-6">ETB</div>
+                <div className={`text-xs ${textSm} mb-6`}>ETB</div>
                 <ul className="space-y-2.5 mb-8">
                   {plan.features.map(f => (
-                    <li key={f} className="flex items-center gap-2.5 text-sm text-slate-300">
+                    <li key={f} className={`flex items-center gap-2.5 text-sm ${dark ? 'text-slate-300' : 'text-gray-700'}`}>
                       <span className="text-amber-400 flex-shrink-0">✓</span>
                       {f}
                     </li>
@@ -512,7 +565,7 @@ export default function LandingPage() {
                   className={`block text-center py-3 rounded-xl font-bold text-sm transition-all ${
                     plan.highlight
                       ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 hover:from-amber-600 hover:to-orange-700 shadow-lg shadow-amber-500/20'
-                      : 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700'
+                      : `${dark ? 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700' : 'bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-200'}`
                   }`}>
                   {plan.cta}
                 </Link>
@@ -526,19 +579,19 @@ export default function LandingPage() {
       <section className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">Loved by Restaurants Across Ethiopia</h2>
+            <h2 className={`text-3xl sm:text-4xl font-black ${text} mb-4`}>Loved by Restaurants Across Ethiopia</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {TESTIMONIALS.map((t, i) => (
               <motion.div key={t.name} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                className={`${bgCard} border ${border} rounded-2xl p-6`}>
                 <div className="flex gap-0.5 mb-4">
                   {[...Array(t.stars)].map((_, j) => <span key={j} className="text-amber-400 text-lg">⭐</span>)}
                 </div>
-                <p className="text-slate-300 text-sm leading-relaxed mb-5 italic">"{t.text}"</p>
+                <p className={`${dark ? 'text-slate-300' : 'text-gray-600'} text-sm leading-relaxed mb-5 italic`}>"{t.text}"</p>
                 <div>
-                  <p className="text-white font-bold text-sm">{t.name}</p>
-                  <p className="text-slate-500 text-xs">{t.role}</p>
+                  <p className={`${text} font-bold text-sm`}>{t.name}</p>
+                  <p className={`${textSm} text-xs`}>{t.role}</p>
                 </div>
               </motion.div>
             ))}
@@ -547,23 +600,23 @@ export default function LandingPage() {
       </section>
 
       {/* ── ABOUT ── */}
-      <section id="about" className="py-20 lg:py-28 bg-slate-900/50">
+      <section id="about" className={`py-20 lg:py-28 ${bgCard2}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">About MEGA Digital Menu</span>
-              <h2 className="text-3xl sm:text-4xl font-black text-white mt-3 mb-5">Built for Ethiopian Restaurants</h2>
-              <p className="text-slate-400 leading-relaxed mb-4">
+              <h2 className={`text-3xl sm:text-4xl font-black ${text} mt-3 mb-5`}>Built for Ethiopian Restaurants</h2>
+              <p className={`${textMd} leading-relaxed mb-4`}>
                 MEGA Digital Menu was built specifically for the Ethiopian restaurant industry. We understand the challenges of managing orders across multiple tables, coordinating kitchen staff, and delivering a great customer experience.
               </p>
-              <p className="text-slate-400 leading-relaxed mb-6">
+              <p className={`${textMd} leading-relaxed mb-6`}>
                 Our platform supports both English and Amharic menus, Ethiopian Birr currency, and the local payment ecosystem. Whether you run a small café or a multi-location chain, MEGA scales with you.
               </p>
               <div className="grid grid-cols-3 gap-4">
                 {[['3+','Restaurants'],['500+','Orders/month'],['4.9★','Rating']].map(([val, label]) => (
-                  <div key={label} className="text-center bg-slate-900 border border-slate-800 rounded-xl p-4">
+                  <div key={label} className={`text-center ${bgCard} border ${border} rounded-xl p-4`}>
                     <div className="text-2xl font-black text-amber-400">{val}</div>
-                    <div className="text-xs text-slate-400 mt-1">{label}</div>
+                    <div className={`text-xs ${textMd} mt-1`}>{label}</div>
                   </div>
                 ))}
               </div>
@@ -575,10 +628,10 @@ export default function LandingPage() {
                 { icon: '🔒', title: 'Secure & Reliable',    desc: '99.9% uptime, encrypted data, role-based access' },
                 { icon: '📞', title: '24/7 Support',          desc: 'Dedicated support team ready to help you succeed' },
               ].map(item => (
-                <div key={item.title} className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                <div key={item.title} className={`${bgCard} border ${border} rounded-2xl p-5`}>
                   <div className="text-3xl mb-2">{item.icon}</div>
-                  <h4 className="text-white font-bold text-sm mb-1">{item.title}</h4>
-                  <p className="text-slate-400 text-xs leading-relaxed">{item.desc}</p>
+                  <h4 className={`${text} font-bold text-sm mb-1`}>{item.title}</h4>
+                  <p className={`${textMd} text-xs leading-relaxed`}>{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -592,8 +645,8 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             <div>
               <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">Contact Us</span>
-              <h2 className="text-3xl sm:text-4xl font-black text-white mt-3 mb-5">We'd Love to Hear From You</h2>
-              <p className="text-slate-400 leading-relaxed mb-8">Have a question, want a demo, or need help getting started? Reach out and our team will get back to you within 24 hours.</p>
+              <h2 className={`text-3xl sm:text-4xl font-black ${text} mt-3 mb-5`}>We'd Love to Hear From You</h2>
+              <p className={`${textMd} leading-relaxed mb-8`}>Have a question, want a demo, or need help getting started? Reach out and our team will get back to you within 24 hours.</p>
               <div className="space-y-4">
                 {[
                   { icon: '📧', label: 'Email',    val: 'support@megadigitalmenu.com' },
@@ -604,44 +657,44 @@ export default function LandingPage() {
                   <div key={item.label} className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center text-lg flex-shrink-0">{item.icon}</div>
                     <div>
-                      <p className="text-xs text-slate-500">{item.label}</p>
-                      <p className="text-white font-medium text-sm">{item.val}</p>
+                      <p className={`text-xs ${textSm}`}>{item.label}</p>
+                      <p className={`${text} font-medium text-sm`}>{item.val}</p>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
+            <div className={`${bgCard} border ${border} rounded-2xl p-8`}>
               {contactSent ? (
                 <div className="text-center py-8">
                   <div className="text-5xl mb-4">✅</div>
-                  <h3 className="text-white font-black text-xl mb-2">Message Sent!</h3>
-                  <p className="text-slate-400 text-sm">We'll get back to you within 24 hours.</p>
+                  <h3 className={`${text} font-black text-xl mb-2`}>Message Sent!</h3>
+                  <p className={`${textMd} text-sm`}>We'll get back to you within 24 hours.</p>
                   <button onClick={() => setContactSent(false)} className="mt-6 px-6 py-2.5 bg-amber-500 text-slate-950 rounded-xl font-bold text-sm hover:bg-amber-600 transition-colors">
                     Send Another
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleContact} className="space-y-4">
-                  <h3 className="text-white font-black text-lg mb-5">Send a Message</h3>
+                  <h3 className={`${text} font-black text-lg mb-5`}>Send a Message</h3>
                   <div>
-                    <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-1.5">Full Name</label>
+                    <label className={`text-xs ${textMd} font-semibold uppercase tracking-wider block mb-1.5`}>Full Name</label>
                     <input required value={contactForm.name} onChange={e => setContactForm({...contactForm, name: e.target.value})}
                       placeholder="Abebe Girma"
-                      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 text-sm" />
+                      className={`w-full px-4 py-3 ${inputBg} border rounded-xl focus:outline-none focus:border-amber-500 text-sm`} />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-1.5">Email Address</label>
+                    <label className={`text-xs ${textMd} font-semibold uppercase tracking-wider block mb-1.5`}>Email Address</label>
                     <input required type="email" value={contactForm.email} onChange={e => setContactForm({...contactForm, email: e.target.value})}
                       placeholder="abebe@example.com"
-                      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 text-sm" />
+                      className={`w-full px-4 py-3 ${inputBg} border rounded-xl focus:outline-none focus:border-amber-500 text-sm`} />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-1.5">Message</label>
+                    <label className={`text-xs ${textMd} font-semibold uppercase tracking-wider block mb-1.5`}>Message</label>
                     <textarea required rows={4} value={contactForm.message} onChange={e => setContactForm({...contactForm, message: e.target.value})}
                       placeholder="Tell us about your restaurant and how we can help..."
-                      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 text-sm resize-none" />
+                      className={`w-full px-4 py-3 ${inputBg} border rounded-xl focus:outline-none focus:border-amber-500 text-sm resize-none`} />
                   </div>
                   <button type="submit"
                     disabled={contactSending}
@@ -668,43 +721,43 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="bg-slate-950 border-t border-slate-800 py-12">
+      <footer className={`${dark ? 'bg-slate-950 border-slate-800' : 'bg-gray-100 border-gray-200'} border-t py-12`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-4">
                 <img src="/mega-logo.png" alt="MEGA Digital Menu" className="h-10 w-auto object-contain" />
               </div>
-              <p className="text-slate-500 text-xs leading-relaxed">Ethiopia's leading digital menu and restaurant management platform.</p>
+              <p className={`${textSm} text-xs leading-relaxed`}>Ethiopia's leading digital menu and restaurant management platform.</p>
             </div>
             <div>
-              <p className="text-white font-bold text-sm mb-3">Product</p>
+              <p className={`${text} font-bold text-sm mb-3`}>Product</p>
               <div className="space-y-2">
                 {['Features','Pricing','QR Codes','Kitchen Display','Reports'].map(l => (
-                  <a key={l} href="#features" className="block text-slate-500 hover:text-slate-300 text-xs transition-colors">{l}</a>
+                  <a key={l} href="#features" className={`block ${textSm} hover:text-amber-500 text-xs transition-colors`}>{l}</a>
                 ))}
               </div>
             </div>
             <div>
-              <p className="text-white font-bold text-sm mb-3">Company</p>
+              <p className={`${text} font-bold text-sm mb-3`}>Company</p>
               <div className="space-y-2">
                 {['About Us','Contact','Blog','Careers','Support'].map(l => (
-                  <a key={l} href="#about" className="block text-slate-500 hover:text-slate-300 text-xs transition-colors">{l}</a>
+                  <a key={l} href="#about" className={`block ${textSm} hover:text-amber-500 text-xs transition-colors`}>{l}</a>
                 ))}
               </div>
             </div>
             <div>
-              <p className="text-white font-bold text-sm mb-3">Get Started</p>
+              <p className={`${text} font-bold text-sm mb-3`}>Get Started</p>
               <div className="space-y-2">
                 <Link to="/register-tenant" className="block text-amber-400 hover:text-amber-300 text-xs font-semibold transition-colors">Sign Up Free →</Link>
               </div>
             </div>
           </div>
-          <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-slate-600 text-xs">© {new Date().getFullYear()} MEGA Digital Menu. All rights reserved.</p>
+          <div className={`border-t ${dark ? 'border-slate-800' : 'border-gray-200'} pt-6 flex flex-col sm:flex-row items-center justify-between gap-4`}>
+            <p className={`${textSm} text-xs`}>© {new Date().getFullYear()} MEGA Digital Menu. All rights reserved.</p>
             <div className="flex gap-4">
               {['Privacy Policy','Terms of Service'].map(l => (
-                <a key={l} href="#" className="text-slate-600 hover:text-slate-400 text-xs transition-colors">{l}</a>
+                <a key={l} href="#" className={`${textSm} hover:text-amber-500 text-xs transition-colors`}>{l}</a>
               ))}
             </div>
           </div>
