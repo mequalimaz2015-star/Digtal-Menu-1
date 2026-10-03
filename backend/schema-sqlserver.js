@@ -4,7 +4,6 @@
  * Called once on first boot when DB_CONNECTION=sqlserver.
  */
 const bcrypt = require('bcryptjs')
-
 async function initSqlServerSchema(pool) {
   const tables = [
     `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='subscription_plans' AND xtype='U')
@@ -24,7 +23,6 @@ async function initSqlServerSchema(pool) {
       is_active BIT DEFAULT 1,
       created_at DATETIME DEFAULT GETDATE()
     )`,
-
     `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tenants' AND xtype='U')
     CREATE TABLE tenants (
       id INT IDENTITY(1,1) PRIMARY KEY,
@@ -35,8 +33,8 @@ async function initSqlServerSchema(pool) {
       description NVARCHAR(MAX),
       logo_url NVARCHAR(500),
       cover_url NVARCHAR(500),
-      address NVARCHAR(500),
-      phone NVARCHAR(50),
+      logo_url NVARCHAR(MAX),
+      cover_url NVARCHAR(MAX),
       email NVARCHAR(200),
       wifi_password NVARCHAR(100),
       working_hours NVARCHAR(200),
@@ -265,8 +263,27 @@ async function seedSqlServerDefaults(pool) {
   try {
     // 0. Live column migrations — add any new columns that may not exist yet
     const columnMigrations = [
-      { table: 'tenants',    column: 'tin_number',    definition: 'NVARCHAR(20) NULL' },
+      { table: 'tenants', column: 'tin_number', definition: 'NVARCHAR(20) NULL' },
     ]
+    // Also ensure logo_url and cover_url are NVARCHAR(MAX) (not the old NVARCHAR(500))
+    try {
+      await pool.request().query(`
+        IF EXISTS (
+          SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_NAME='tenants' AND COLUMN_NAME='logo_url'
+          AND CHARACTER_MAXIMUM_LENGTH IS NOT NULL AND CHARACTER_MAXIMUM_LENGTH < 2000
+        )
+        ALTER TABLE tenants ALTER COLUMN logo_url NVARCHAR(MAX)
+      `)
+      await pool.request().query(`
+        IF EXISTS (
+          SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_NAME='tenants' AND COLUMN_NAME='cover_url'
+          AND CHARACTER_MAXIMUM_LENGTH IS NOT NULL AND CHARACTER_MAXIMUM_LENGTH < 2000
+        )
+        ALTER TABLE tenants ALTER COLUMN cover_url NVARCHAR(MAX)
+      `)
+    } catch (_) {}
     for (const { table, column, definition } of columnMigrations) {
       try {
         const checkCol = await pool.request().query(

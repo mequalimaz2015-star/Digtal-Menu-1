@@ -41,31 +41,44 @@ router.put('/', requireAuth, requireTenantMatch, requireRole(['admin']), async (
     } = req.body
 
     try {
-      await query(`
-        UPDATE tenants SET
-          name=COALESCE($1, name), name_am=COALESCE($2, name_am),
-          tagline=COALESCE($3, tagline), description=COALESCE($4, description),
-          address=COALESCE($5, address), phone=COALESCE($6, phone),
-          wifi_password=COALESCE($7, wifi_password), working_hours=COALESCE($8, working_hours),
-          vat_rate=COALESCE($9, vat_rate), service_charge_rate=COALESCE($10, service_charge_rate),
-          currency=COALESCE($11, currency),
-          logo_url=COALESCE($12, logo_url),
-          cover_url=COALESCE($13, cover_url),
-          updated_at=GETDATE()
-        WHERE id=$14
-      `, [
-        name, name_am, tagline, description, address, phone,
-        wifi_password, working_hours, vat_rate, service_charge_rate,
-        currency,
-        logo_url  !== undefined ? logo_url  : null,
-        cover_url !== undefined ? cover_url : null,
-        req.tenantId,
-      ])
+      // Build dynamic SET clauses — only update fields that were actually sent
+      const fields = []
+      const params = []
+      let idx = 1
+
+      const addField = (col, val) => {
+        fields.push(`${col}=$${idx}`)
+        params.push(val)
+        idx++
+      }
+
+      if (name              !== undefined) addField('name', name)
+      if (name_am           !== undefined) addField('name_am', name_am)
+      if (tagline           !== undefined) addField('tagline', tagline)
+      if (description       !== undefined) addField('description', description)
+      if (address           !== undefined) addField('address', address)
+      if (phone             !== undefined) addField('phone', phone)
+      if (wifi_password     !== undefined) addField('wifi_password', wifi_password)
+      if (working_hours     !== undefined) addField('working_hours', working_hours)
+      if (vat_rate          !== undefined) addField('vat_rate', vat_rate)
+      if (service_charge_rate !== undefined) addField('service_charge_rate', service_charge_rate)
+      if (currency          !== undefined) addField('currency', currency)
+      // Always update logo_url and cover_url when explicitly sent (even null/empty)
+      if (logo_url  !== undefined) addField('logo_url', logo_url  || null)
+      if (cover_url !== undefined) addField('cover_url', cover_url || null)
+
+      fields.push('updated_at=GETDATE()')
+      params.push(req.tenantId)
+
+      await query(
+        `UPDATE tenants SET ${fields.join(', ')} WHERE id=$${idx}`,
+        params
+      )
 
       const result = await query(`SELECT * FROM tenants WHERE id = $1`, [req.tenantId])
       if (result.rows[0]) return res.json(result.rows[0])
     } catch (dbErr) {
-      console.warn('DB update failed in PUT /restaurant, using localStore:', dbErr.message)
+      console.warn('DB update failed in PUT /restaurant:', dbErr.message)
     }
 
     const updated = local.updateTenant(req.tenantId, {
@@ -80,8 +93,8 @@ router.put('/', requireAuth, requireTenantMatch, requireRole(['admin']), async (
       ...(vat_rate !== undefined && { vat_rate }),
       ...(service_charge_rate !== undefined && { service_charge_rate }),
       ...(currency !== undefined && { currency }),
-      ...(logo_url !== undefined && { logo_url }),
-      ...(cover_url !== undefined && { cover_url }),
+      ...(logo_url  !== undefined && { logo_url:  logo_url  || null }),
+      ...(cover_url !== undefined && { cover_url: cover_url || null }),
     })
 
     res.json(updated || { id: req.tenantId, name })
