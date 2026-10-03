@@ -321,6 +321,30 @@ function makeStore(set, get) {
       await client.delete(`/menu-items/${id}`)
     },
 
+    // Void = mark as unavailable (soft delete — item stays in DB)
+    voidMenuItem: async (id) => {
+      const item = get().menuItems.find(i => i.id === id)
+      if (!item) return
+      set(s => ({ menuItems: s.menuItems.map(i => i.id === id ? { ...i, isAvailable: false } : i) }))
+      try {
+        await client.put(`/menu-items/${id}`, {
+          category_id: item.categoryId, name: item.name, name_am: item.nameAm,
+          description: item.description, description_am: item.descriptionAm,
+          price: item.price, image_url: item.image, prep_time: item.prepTime,
+          is_spicy: item.isSpicy, is_vegetarian: item.isVegetarian,
+          is_available: false, is_featured: item.isFeatured,
+          is_popular: item.isPopular, is_best_seller: item.isBestSeller,
+          chef_recommended: item.chefRecommended, rating: item.rating,
+          calories: item.calories, discount: item.discount,
+          allergens: Array.isArray(item.allergens) ? item.allergens.join(',') : item.allergens,
+        })
+      } catch (err) {
+        // Revert on failure
+        set(s => ({ menuItems: s.menuItems.map(i => i.id === id ? { ...i, isAvailable: true } : i) }))
+        throw err
+      }
+    },
+
     toggleAvailable: async (id) => {
       const item = get().menuItems.find(i => i.id === id)
       if (!item) return

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiImage, FiX, FiSave, FiDownload, FiUpload, FiZap } from 'react-icons/fi'
+import { FiPlus, FiEdit2, FiSearch, FiX, FiSave, FiDownload, FiUpload, FiZap, FiSlash } from 'react-icons/fi'
 import { BsFire, BsLeaf } from 'react-icons/bs'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
@@ -16,7 +16,7 @@ const emptyForm = {
 }
 
 export default function MenuItems() {
-  const { menuItems, categories, addMenuItem, updateMenuItem, deleteMenuItem, toggleAvailable, fetchAll } = useMenuStore()
+  const { menuItems, categories, addMenuItem, updateMenuItem, deleteMenuItem, voidMenuItem, toggleAvailable, fetchAll } = useMenuStore()
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('all')
   const [showModal, setShowModal] = useState(false)
@@ -165,12 +165,12 @@ export default function MenuItems() {
   }
 
   const handleDelete = async (item) => {
-    if (!confirm(`Delete "${item.name}"?`)) return
+    if (!confirm(`Void "${item.name}"? This will mark the item as unavailable.`)) return
     try {
-      await deleteMenuItem(item.id)
-      toast.success('🗑️ Deleted')
+      await voidMenuItem(item.id)
+      toast.success('⊘ Item voided')
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to delete item')
+      toast.error(err?.response?.data?.error || 'Failed to void item')
     }
   }
 
@@ -246,7 +246,7 @@ export default function MenuItems() {
                   const cat = getCat(item.categoryId)
                   return (
                     <motion.tr key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }} className={`border-t border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 ${!item.isAvailable ? 'opacity-60' : ''}`}>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         {item.menuItemRef ? (
                           <span className="inline-block px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[11px] font-black tracking-wide border border-amber-200 dark:border-amber-800">
                             {item.menuItemRef}
@@ -255,7 +255,7 @@ export default function MenuItems() {
                           <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3 align-middle">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0">
                             {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xl">🍽️</div>}
@@ -266,16 +266,16 @@ export default function MenuItems() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         <span className="text-gray-700 dark:text-gray-300 whitespace-nowrap">
                           {cat ? `${cat.icon} ${cat.name}` : '—'}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         <span className="font-bold text-gray-900 dark:text-white">{Number(item.price).toFixed(0)} ETB</span>
                         {item.discount > 0 && <div className="text-xs text-red-500">-{item.discount}%</div>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         <div className="flex gap-1 flex-wrap">
                           {item.isSpicy && <span className="badge badge-red"><BsFire size={9} /> Spicy</span>}
                           {item.isVegetarian && <span className="badge badge-green"><BsLeaf size={9} /> Veg</span>}
@@ -283,15 +283,17 @@ export default function MenuItems() {
                           {item.isBestSeller && <span className="badge badge-amber">🔥</span>}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         <button onClick={async () => { try { await toggleAvailable(item.id) } catch { toast.error('Failed to update') } }} className={`toggle-btn ${item.isAvailable ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                           <span className={`toggle-dot ${item.isAvailable ? 'left-5' : 'left-0.5'}`} />
                         </button>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => openEdit(item)} className="icon-btn"><FiEdit2 size={14} /></button>
-                          <button onClick={() => handleDelete(item)} className="icon-btn text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"><FiTrash2 size={14} /></button>
+                          <button onClick={() => openEdit(item)} className="icon-btn" title="Edit"><FiEdit2 size={14} /></button>
+                          <button onClick={() => handleDelete(item)} className="icon-btn text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20" title="Void item">
+                            <FiSlash size={14} />
+                          </button>
                         </div>
                       </td>
                     </motion.tr>
