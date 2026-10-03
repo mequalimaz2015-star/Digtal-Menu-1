@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiSearch, FiEye, FiX, FiRefreshCw, FiTrash2, FiPrinter } from 'react-icons/fi'
+import { FiSearch, FiEye, FiX, FiRefreshCw, FiTrash2, FiPrinter, FiSlash } from 'react-icons/fi'
 import { io } from 'socket.io-client'
 import { useOrderStore } from '../../store/useOrderStore'
 import toast from 'react-hot-toast'
@@ -63,6 +63,9 @@ export default function Orders() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [voidModal, setVoidModal] = useState(null)   // order to void
+  const [voidReason, setVoidReason] = useState('')
+  const [voiding, setVoiding] = useState(false)
   const intervalRef = useRef(null)
   const prevOrderIdsRef = useRef(new Set())
 
@@ -190,13 +193,46 @@ export default function Orders() {
     }
   }
 
-  // ── Delete order ──────────────────────────────
-  const handleDelete = async (order) => {
-    if (!confirm(`Delete order #${order.id}?`)) return
+  // ── Void order (sets status → cancelled, keeps it in DB) ───────────────────
+  const openVoid = (order) => {
+    if (order.status === 'cancelled') {
+      // Already cancelled — offer hard delete instead
+      if (!confirm(`Permanently delete order #${order.id?.slice(-6)}? This cannot be undone.`)) return
+      handleHardDelete(order)
+      return
+    }
+    setVoidReason('')
+    setVoidModal(order)
+  }
+
+  const confirmVoid = async () => {
+    if (!voidModal) return
+    setVoiding(true)
+    const order = voidModal
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled' } : o))
+    if (selectedOrder?.id === order.id) setSelectedOrder(s => ({ ...s, status: 'cancelled' }))
+    try {
+      await client.put(`/orders/${order.dbId}/status`, {
+        status: 'cancelled',
+        notes: voidReason ? `VOIDED: ${voidReason}` : 'VOIDED by admin',
+      })
+      toast.success(`Order #${order.id?.slice(-6)} voided`)
+    } catch {
+      toast.error('Failed to void order')
+      fetchOrders(true)
+    } finally {
+      setVoiding(false)
+      setVoidModal(null)
+    }
+  }
+
+  // ── Hard delete (only for already-cancelled orders) ───────────────────────
+  const handleHardDelete = async (order) => {
     setOrders(prev => prev.filter(o => o.id !== order.id))
+    if (selectedOrder?.id === order.id) setSelectedOrder(null)
     try {
       await client.delete(`/orders/${order.dbId}`)
-      toast.success('Order deleted')
+      toast.success('Order removed')
     } catch {
       toast.error('Failed to delete')
       fetchOrders(true)
@@ -353,8 +389,18 @@ export default function Orders() {
                       <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{timeAgo(order.createdAt)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
-                          <button onClick={() => setSelectedOrder(order)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"><FiEye size={14} /></button>
-                          <button onClick={() => handleDelete(order)} className="w-8 h-8 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"><FiTrash2 size={14} /></button>
+                          <button onClick={() => setSelectedOrder(order)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="View details"><FiEye size={14} /></button>
+                          <button
+                            onClick={() => openVoid(order)}
+                            title={order.status === 'cancelled' ? 'Delete permanently' : 'Void / Cancel order'}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                              order.status === 'cancelled'
+                                ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                : 'text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                            }`}
+                          >
+                            {order.status === 'cancelled' ? <FiTrash2 size={14} /> : <FiSlash size={14} />}
+                          </button>
                         </div>
                       </td>
                     </motion.tr>
@@ -499,6 +545,111 @@ export default function Orders() {
                     })}
                   </div>
                 </div>
+                {/* Void button inside modal */}
+                {selectedOrder.status !== 'cancelled' && (
+                  <button
+                    onClick={() => { setSelectedOrder(null); openVoid(selectedOrder) }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-red-200 dark:border-red-800 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-bold text-sm transition-colors"
+                  >
+                    <FiSlash size={15} /> Void / Cancel This Order
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* ── Void Order Confirmation Modal ── */}
+      <AnimatePresence>
+        {voidModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="modal-backdrop"
+            onClick={() => !voiding && setVoidModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 dark:border-gray-800 p-6"
+            >
+              {/* Icon */}
+              <div className="flex items-center gap-4 mb-5">
+                <div className="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-3xl flex-shrink-0">
+                  🚫
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900 dark:text-white">
+                    Void Order #{voidModal.id?.slice(-6)}
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    This will cancel the order and notify the kitchen
+                  </p>
+                </div>
+              </div>
+
+              {/* Order summary */}
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-5 space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Table / Type</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {voidModal.orderType === 'takeaway' ? '🛍️ Takeaway' : `Table ${voidModal.tableNumber}`}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Items</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{voidModal.items?.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Total</span>
+                  <span className="font-bold text-orange-500">{Number(voidModal.grandTotal || 0).toFixed(0)} ETB</span>
+                </div>
+              </div>
+
+              {/* Void reason */}
+              <div className="mb-5">
+                <label className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 block mb-2">
+                  Void Reason (optional)
+                </label>
+                <select
+                  value={voidReason}
+                  onChange={e => setVoidReason(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                >
+                  <option value="">Select a reason…</option>
+                  <option value="Customer cancelled">Customer cancelled</option>
+                  <option value="Item out of stock">Item out of stock</option>
+                  <option value="Duplicate order">Duplicate order</option>
+                  <option value="Wrong order placed">Wrong order placed</option>
+                  <option value="Test order">Test order</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {/* Warning */}
+              <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl mb-5 text-xs text-amber-700 dark:text-amber-400">
+                ⚠️ The order will be marked as <strong>Cancelled</strong> and kept in your records. The kitchen will be notified.
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setVoidModal(null)}
+                  disabled={voiding}
+                  className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 font-bold text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={confirmVoid}
+                  disabled={voiding}
+                  className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white font-black text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  {voiding ? (
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <><FiSlash size={14} /> Void Order</>
+                  )}
+                </button>
               </div>
             </motion.div>
           </motion.div>
